@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import DashboardPage from '../app/dashboard/page'
 import { useAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
@@ -163,5 +163,31 @@ describe('Dashboard page (web)', () => {
     await waitFor(() => {
       expect(screen.getByText('Draft approved successfully.')).toBeInTheDocument()
     })
+  })
+
+  it('polls dashboard data every 30 seconds', async () => {
+    jest.useFakeTimers()
+    primeDashboardFetches()
+    // prime the data returned by the automatic refresh
+    ;(apiClient.get as jest.Mock)
+      .mockResolvedValueOnce(statsResponse)
+      .mockResolvedValueOnce({ data: [] })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Twin Profile')).toBeInTheDocument()
+    })
+
+    act(() => {
+      jest.advanceTimersByTime(30_000)
+    })
+
+    await waitFor(() => {
+      // initial fetch: 3 calls (twin + stats + drafts); poll refresh: 2 calls (stats + drafts)
+      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(5)
+    })
+
+    jest.useRealTimers()
   })
 })

@@ -89,6 +89,26 @@ export default function DashboardPage() {
     setPendingDrafts(draftsResponse.data);
   };
 
+  // Auto-refresh: 30-second interval + visibility-change revalidation
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshDashboard();
+    }, 30_000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshDashboard();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleDraftAction = async (
     draftId: string,
     action: "approve" | "reject" | "edit" | "skip",

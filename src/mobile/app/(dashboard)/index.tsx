@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  AppState,
 } from 'react-native'
 import { useMobileAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
@@ -96,6 +97,24 @@ export default function DashboardScreen() {
     setStats(statsResponse.data)
     setPendingDrafts(draftsResponse.data)
   }
+
+  // Auto-refresh: foreground resume + 30-second interval
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshDashboard()
+      }
+    })
+
+    const intervalId = setInterval(() => {
+      refreshDashboard()
+    }, 30_000)
+
+    return () => {
+      subscription.remove()
+      clearInterval(intervalId)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDraftAction = async (
     draftId: string,
