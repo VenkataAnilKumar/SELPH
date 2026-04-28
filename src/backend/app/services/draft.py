@@ -8,6 +8,20 @@ from app.models import Draft, Message, Twin, AuditLog
 
 class DraftService:
     """Service for managing draft responses"""
+
+    @staticmethod
+    def _build_audit_details(draft: Draft) -> dict:
+        """Build consistent audit payload for draft lifecycle actions."""
+        return {
+            "confidence_score": draft.confidence_score,
+            "generation_source": draft.generation_source,
+            "llm_model": draft.llm_model,
+            "fallback_reason": draft.fallback_reason,
+            "estimated_total_tokens": draft.estimated_total_tokens,
+            "estimated_cost_usd": draft.estimated_cost_usd,
+            "status": draft.status,
+            "user_action": draft.user_action,
+        }
     
     @staticmethod
     def get_draft(db: Session, draft_id: str) -> Draft:
@@ -122,7 +136,7 @@ class DraftService:
             action="approve_draft",
             resource_type="Draft",
             resource_id=draft_id,
-            details={"confidence_score": draft.confidence_score},
+            details=DraftService._build_audit_details(draft),
         )
         db.add(audit)
         db.commit()
@@ -149,7 +163,7 @@ class DraftService:
             action="reject_draft",
             resource_type="Draft",
             resource_id=draft_id,
-            details={},
+            details=DraftService._build_audit_details(draft),
         )
         db.add(audit)
         db.commit()
@@ -182,7 +196,7 @@ class DraftService:
             action="edit_draft",
             resource_type="Draft",
             resource_id=draft_id,
-            details={},
+            details=DraftService._build_audit_details(draft),
         )
         db.add(audit)
         db.commit()
@@ -209,7 +223,7 @@ class DraftService:
             action="skip_draft",
             resource_type="Draft",
             resource_id=draft_id,
-            details={},
+            details=DraftService._build_audit_details(draft),
         )
         db.add(audit)
         db.commit()

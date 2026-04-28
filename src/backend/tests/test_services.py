@@ -3,6 +3,7 @@ Unit tests for backend services
 """
 
 import pytest
+from app.models import AuditLog
 from app.services.auth import AuthService
 from app.services.twin import TwinService
 from app.services.identity import IdentityService
@@ -401,6 +402,9 @@ class TestDraftService:
         approved_draft = draft_service.approve_draft(test_db, draft.id, test_user.id)
         
         assert approved_draft.status == "approved"
+        audit = test_db.query(AuditLog).filter(AuditLog.resource_id == draft.id, AuditLog.action == "approve_draft").first()
+        assert audit is not None
+        assert "generation_source" in audit.details
 
     def test_reject_draft(self, test_db, test_user):
         """Test rejecting a draft"""
@@ -444,6 +448,51 @@ class TestDraftService:
         
         assert edited_draft.status == "edited"
         assert edited_draft.edited_content == "Hello there!"
+
+    def test_skip_draft_records_skip_action(self, test_db, test_user):
+        """Skip should preserve rejected status but keep distinct user_action and audit trail."""
+        from app.services.message import MessageService
+
+        message = MessageService.create_message(
+            test_db, test_user.id, "instagram_dm", "sender", "John", "Hello", {}
+        )
+        draft = DraftService.create_draft(
+            test_db, message.id, test_user.id, test_user.twin.id, "Hi!", 0.8, True
+        )
+
+        skipped_draft = DraftService.skip_draft(test_db, draft.id, test_user.id)
+
+        assert skipped_draft.status == "rejected"
+        assert skipped_draft.user_action == "skip"
+        audit = test_db.query(AuditLog).filter(AuditLog.resource_id == draft.id, AuditLog.action == "skip_draft").first()
+        assert audit is not None
+
+    def test_get_twin_stats_counts_edited_as_processed(self, test_db, test_user):
+        """Edited drafts should count as processed in twin stats."""
+        message = MessageService.create_message(
+            test_db, test_user.id, "instagram_dm", "sender_stats", "John", "Hello", {}
+        )
+        draft = DraftService.create_draft(
+            test_db,
+            message.id,
+            test_user.id,
+            test_user.twin.id,
+            "Hi!",
+            confidence_score=0.8,
+            moderation_passed=True,
+            generation_source="deterministic",
+            llm_model="deterministic-fallback",
+            fallback_reason="llm_disabled",
+            estimated_total_tokens=100,
+            estimated_cost_usd=0.0,
+        )
+        DraftService.edit_draft(test_db, draft.id, test_user.id, "Updated")
+
+        stats = TwinService.get_twin_stats(test_db, test_user.id)
+
+        assert stats["processed_drafts"] == 1
+        assert stats["generation_source_breakdown"]["deterministic"] >= 1
+        assert stats["fallback_reason_breakdown"]["llm_disabled"] >= 1
 
     def test_get_draft_summary(self, test_db, test_user):
         """Test getting draft summary statistics"""
