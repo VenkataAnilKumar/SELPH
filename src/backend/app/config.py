@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = ""  # e.g. https://api.selph.ai/v1/channels/gmail/callback
     google_pubsub_topic: str = ""  # e.g. projects/selph/topics/gmail-push
+    google_webhook_secret: str = ""  # Optional shared secret for /channels/gmail/webhook
 
     # Voice Clone (Phase 6)
     voice_provider: str = "mock"  # mock | elevenlabs
@@ -79,6 +80,10 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     enable_metrics: bool = True
+
+    # Security hardening
+    auth_rate_limit_per_minute: int = 20
+    enforce_production_jwt_secret: bool = True
     
     # Feature Flags
     feature_twin_briefing: bool = False

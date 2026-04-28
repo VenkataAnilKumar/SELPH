@@ -12,6 +12,7 @@ Provides:
 """
 
 import json
+import hmac
 import logging
 from datetime import timedelta
 
@@ -234,9 +235,16 @@ async def instagram_webhook_receive(
         return WebhookAckResponse(received=True, queued=0)
 
     queued = 0
+    page_user_cache: dict[str, str | None] = {}
     for nm in normalized_messages:
         page_id = nm.channel_metadata.get("page_id")
-        user_id = ChannelService.find_user_by_instagram_page(db, page_id) if page_id else None
+        if not page_id:
+            user_id = None
+        elif page_id in page_user_cache:
+            user_id = page_user_cache[page_id]
+        else:
+            user_id = ChannelService.find_user_by_instagram_page(db, page_id)
+            page_user_cache[page_id] = user_id
 
         if not user_id:
             logger.warning(
@@ -351,6 +359,15 @@ async def gmail_webhook_receive(
     Google sends a POST with a base64-encoded notification when new emails arrive.
     We decode it, fetch the new message via Gmail History API, and enqueue processing.
     """
+    settings = get_settings()
+    if settings.google_webhook_secret:
+        received_secret = request.headers.get("X-Webhook-Token", "")
+        if not hmac.compare_digest(received_secret, settings.google_webhook_secret):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid Gmail webhook token",
+            )
+
     try:
         payload = await request.json()
     except Exception:

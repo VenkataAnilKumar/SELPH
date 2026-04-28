@@ -869,6 +869,27 @@ class TestGmailWebhookEndpoint:
         assert resp.status_code == 200
         assert resp.json()["queued"] == 0
 
+    def test_webhook_rejects_invalid_shared_secret_when_configured(self, unauth_client):
+        with patch("app.routers.channels.get_settings") as mock_settings:
+            mock_settings.return_value.google_webhook_secret = "expected-secret"
+            resp = unauth_client.post(
+                "/v1/channels/gmail/webhook",
+                json=self._make_pubsub_body("user@gmail.com"),
+                headers={"X-Webhook-Token": "wrong-secret"},
+            )
+        assert resp.status_code == 403
+
+    def test_webhook_accepts_shared_secret_when_configured(self, unauth_client):
+        with patch("app.routers.channels.get_settings") as mock_settings:
+            mock_settings.return_value.google_webhook_secret = "expected-secret"
+            resp = unauth_client.post(
+                "/v1/channels/gmail/webhook",
+                json=self._make_pubsub_body("nobody@example.com"),
+                headers={"X-Webhook-Token": "expected-secret"},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["queued"] == 0
+
     def test_webhook_known_user_enqueues_messages(self, unauth_client, test_db, db_user):
         ChannelService.upsert_credential(
             test_db, db_user.id, "gmail",
