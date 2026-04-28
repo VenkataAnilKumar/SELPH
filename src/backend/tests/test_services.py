@@ -9,6 +9,7 @@ from app.services.identity import IdentityService
 from app.services.message import MessageService
 from app.services.draft import DraftService
 from app.services.moderation import ModerationService
+from app.services.twin_engine import TwinEngineService
 from app.schemas.auth import SignupRequest, LoginRequest
 
 
@@ -463,6 +464,81 @@ class TestDraftService:
         assert summary["pending"] == 3
         assert summary["approved"] == 0
         assert summary["rejected"] == 0
+
+
+class TestTwinEngineService:
+    """Test Phase 2 twin engine pipeline."""
+
+    def test_pipeline_returns_draft_and_confidence(self, test_db, test_user):
+        """Pipeline should return draft content and confidence metadata."""
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "sender_1",
+            "Alex",
+            "Hey, can you help me with content strategy?",
+            {},
+        )
+
+        result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+
+        assert result["twin_id"] == test_user.twin.id
+        assert isinstance(result["draft"], str)
+        assert len(result["draft"]) > 0
+        assert 0.0 <= result["confidence_score"] <= 1.0
+        assert result["confidence_label"] in ["High", "Medium", "Low"]
+        assert "topic_known" in result["confidence_factors"]
+
+    def test_pipeline_uses_avoided_topic_fallback(self, test_db, test_user):
+        """Avoided topics should trigger safe fallback response."""
+        IdentityService.add_avoided_topic(test_db, test_user.id, "politics")
+
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "sender_2",
+            "Sam",
+            "What is your take on politics this week?",
+            {},
+        )
+
+        result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+        assert "That's not something I cover" in result["draft"]
+        assert result["confidence_factors"]["no_avoided_topics"] == 0.0
+
+    def test_pipeline_topic_match_increases_score(self, test_db, test_user):
+        """Known topic match should produce a higher topic factor."""
+        IdentityService.add_known_topic(test_db, test_user.id, "photography")
+
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "sender_3",
+            "Jamie",
+            "Any photography tips for portraits?",
+            {},
+        )
+
+        result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+        assert result["confidence_factors"]["topic_known"] >= 0.9
+
+    def test_pipeline_respects_channel_word_limit(self, test_db, test_user):
+        """Generated draft should respect channel max words."""
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "twitter_dm",
+            "sender_4",
+            "Taylor",
+            "Please share your detailed perspective on audience engagement and retention strategies.",
+            {},
+        )
+
+        result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+        assert len(result["draft"].split()) <= 100
 
 
 class TestModerationService:
