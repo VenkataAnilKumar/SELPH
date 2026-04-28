@@ -5,17 +5,20 @@ module.exports = {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
-  // Module path mapping
+  // Module path mapping - order matters, specific first
   moduleNameMapper: {
+    '^@/lib/(.*)$': '<rootDir>/lib/$1',
+    '^@/app/(.*)$': '<rootDir>/app/$1',
     '^@/(.*)$': '<rootDir>/$1',
     '^@selph/shared$': '<rootDir>/../shared/index.ts',
   },
 
-  // Test file patterns
-  testMatch: [
-    '<rootDir>/tests/**/*.test.ts',
-    '<rootDir>/tests/**/*.test.tsx',
-  ],
+  // Transform files
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
+      tsconfig: '<rootDir>/tsconfig.json',
+    }],
+  },
 
   // Module file extensions
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
