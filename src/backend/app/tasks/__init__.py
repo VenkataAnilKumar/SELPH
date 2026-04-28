@@ -12,6 +12,10 @@ from app.tasks.message_processing import (
     batch_process_messages,
 )
 
+from app.tasks.send_reply import (
+    send_channel_reply,
+)
+
 from app.tasks.voice_synthesis import (
     synthesize_voice,
 )
@@ -25,6 +29,7 @@ __all__ = [
     "process_draft_generation",
     "process_incoming_message",
     "batch_process_messages",
+    "send_channel_reply",
     "synthesize_voice",
     "generate_avatar",
 ]

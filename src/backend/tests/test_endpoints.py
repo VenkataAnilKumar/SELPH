@@ -516,7 +516,7 @@ class TestChannelEndpoints:
         assert response.status_code == 200
 
         channels = {item["channel"]: item for item in response.json()}
-        assert channels["instagram"]["connected"] is True
+        assert channels["instagram_dm"]["connected"] is True
         assert channels["gmail"]["connected"] is True
 
     def test_disconnect_channel(self, client, auth_headers):

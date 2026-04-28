@@ -63,11 +63,13 @@ class Settings(BaseSettings):
     meta_app_id: str = ""
     meta_app_secret: str = ""
     meta_verify_token: str = ""
+    meta_oauth_redirect_uri: str = ""  # e.g. https://api.selph.ai/v1/channels/instagram/callback
     
     # Google (Gmail)
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
-    google_oauth_redirect_uri: str = ""
+    google_oauth_redirect_uri: str = ""  # e.g. https://api.selph.ai/v1/channels/gmail/callback
+    google_pubsub_topic: str = ""  # e.g. projects/selph/topics/gmail-push
     
     # Logging
     log_level: str = "INFO"
