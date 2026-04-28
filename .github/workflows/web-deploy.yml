@@ -1,11 +1,7 @@
 name: Deploy Web App
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/web/**'
-      - '.github/workflows/web-deploy.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
