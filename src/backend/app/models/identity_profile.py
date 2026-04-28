@@ -26,6 +26,9 @@ class IdentityProfile(BaseModel):
     embedding_model = Column(String, default="text-embedding-3-small", nullable=False)
     topics_known_text = Column(Text, nullable=True)  # Raw text for regeneration
     topics_avoided_text = Column(Text, nullable=True)
+    voice_model_id = Column(String, nullable=True)
+    voice_provider = Column(String, default="mock", nullable=False)
+    voice_sample_url = Column(Text, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="identity_profile")

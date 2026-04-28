@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = ""  # e.g. https://api.selph.ai/v1/channels/gmail/callback
     google_pubsub_topic: str = ""  # e.g. projects/selph/topics/gmail-push
+
+    # Voice Clone (Phase 6)
+    voice_provider: str = "mock"  # mock | elevenlabs
+    elevenlabs_api_key: str = ""
+    voice_default_model_id: str = ""
     
     # Logging
     log_level: str = "INFO"
