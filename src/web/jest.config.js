@@ -5,18 +5,23 @@ module.exports = {
   // Setup files after test environment
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
-  // Module path mapping for TypeScript imports
+  // Module path mapping for TypeScript imports - order matters, specific first
   moduleNameMapper: {
+    '^@/lib/(.*)$': '<rootDir>/lib/$1',
+    '^@/components/(.*)$': '<rootDir>/components/$1',
+    '^@/app/(.*)$': '<rootDir>/app/$1',
     '^@/(.*)$': '<rootDir>/$1',
     '^@selph/shared$': '<rootDir>/../shared/index.ts',
   },
 
-  // Transform files
+  // Transform files - Add tsconfig sourceMap
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: {
         jsx: 'react-jsx',
+        sourceMap: true,
       },
+      useESM: true,
     }],
   },
 
