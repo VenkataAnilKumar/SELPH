@@ -12,11 +12,69 @@ jest.mock('@/lib/auth-context', () => ({
 jest.mock('@selph/shared', () => ({
   apiClient: {
     get: jest.fn(),
+    approveDraft: jest.fn(),
   },
 }))
 
 describe('Dashboard screen (mobile)', () => {
   const logoutMock = jest.fn()
+
+  const twinResponse = {
+    data: {
+      id: 'twin-1',
+      user_id: 'u-1',
+      domain: 'Career Coaching',
+      tone: 'Professional',
+      status: 'active',
+    },
+  }
+
+  const statsResponse = {
+    data: {
+      total_messages: 8,
+      pending_drafts: 1,
+      processed_drafts: 3,
+      total_estimated_tokens: 420,
+      total_estimated_cost_usd: 0.0024,
+      fallback_rate: 0.25,
+      generation_source_breakdown: {
+        llm: 3,
+        deterministic: 1,
+      },
+      model_breakdown: {
+        'claude-sonnet-4-6': 3,
+      },
+      fallback_reason_breakdown: {
+        llm_disabled: 1,
+      },
+    },
+  }
+
+  const pendingDraftsResponse = {
+    data: [
+      {
+        id: 'draft-1',
+        content: 'Here is a thoughtful response for your audience.',
+        status: 'pending_approval',
+        confidence_score: 0.91,
+        confidence_label: 'High',
+        confidence_reasoning: 'Strong match with known tone and domain.',
+        generation_source: 'llm',
+        llm_model: 'claude-sonnet-4-6',
+        fallback_reason: null,
+        estimated_total_tokens: 160,
+        estimated_cost_usd: 0.00096,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ],
+  }
+
+  const primeDashboardFetches = () => {
+    ;(apiClient.get as jest.Mock)
+      .mockResolvedValueOnce(twinResponse)
+      .mockResolvedValueOnce(statsResponse)
+      .mockResolvedValueOnce(pendingDraftsResponse)
+  }
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -27,17 +85,9 @@ describe('Dashboard screen (mobile)', () => {
   })
 
   it('renders twin profile after successful fetch', async () => {
-    ;(apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: {
-        id: 'twin-1',
-        user_id: 'u-1',
-        domain: 'Career Coaching',
-        tone: 'Professional',
-        status: 'active',
-      },
-    })
+    primeDashboardFetches()
 
-    const { getByText, queryByText } = render(<DashboardScreen />)
+    const { getByText, getAllByText, queryByText } = render(<DashboardScreen />)
 
     expect(getByText('Loading profile...')).toBeTruthy()
 
@@ -48,15 +98,18 @@ describe('Dashboard screen (mobile)', () => {
     expect(getByText('Career Coaching')).toBeTruthy()
     expect(getByText('Professional')).toBeTruthy()
     expect(getByText('active')).toBeTruthy()
-    expect(getByText('Quick Actions')).toBeTruthy()
+    expect(getByText('Approval Loop')).toBeTruthy()
+    expect(getAllByText('Pending Drafts')).toHaveLength(2)
+    expect(getByText('Here is a thoughtful response for your audience.')).toBeTruthy()
+    expect(getByText('Model Signals')).toBeTruthy()
     expect(queryByText('Loading profile...')).toBeNull()
   })
 
-  it('shows API error when twin fetch fails', async () => {
+  it('shows API error when dashboard fetch fails', async () => {
     ;(apiClient.get as jest.Mock).mockRejectedValueOnce({
       response: {
         data: {
-          detail: 'Twin profile unavailable',
+          detail: 'Dashboard unavailable',
         },
       },
     })
@@ -64,20 +117,12 @@ describe('Dashboard screen (mobile)', () => {
     const { getByText } = render(<DashboardScreen />)
 
     await waitFor(() => {
-      expect(getByText('Twin profile unavailable')).toBeTruthy()
+      expect(getByText('Dashboard unavailable')).toBeTruthy()
     })
   })
 
   it('opens logout confirmation alert', async () => {
-    ;(apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: {
-        id: 'twin-1',
-        user_id: 'u-1',
-        domain: 'Career Coaching',
-        tone: 'Professional',
-        status: 'active',
-      },
-    })
+    primeDashboardFetches()
 
     const { getByText } = render(<DashboardScreen />)
 
@@ -95,15 +140,7 @@ describe('Dashboard screen (mobile)', () => {
   })
 
   it('runs logout action when confirmation button is pressed', async () => {
-    ;(apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: {
-        id: 'twin-1',
-        user_id: 'u-1',
-        domain: 'Career Coaching',
-        tone: 'Professional',
-        status: 'active',
-      },
-    })
+    primeDashboardFetches()
 
     const { getByText } = render(<DashboardScreen />)
 
@@ -128,15 +165,7 @@ describe('Dashboard screen (mobile)', () => {
 
   it('shows error alert when confirmed logout fails', async () => {
     logoutMock.mockRejectedValueOnce(new Error('network error'))
-    ;(apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: {
-        id: 'twin-1',
-        user_id: 'u-1',
-        domain: 'Career Coaching',
-        tone: 'Professional',
-        status: 'active',
-      },
-    })
+    primeDashboardFetches()
 
     const { getByText } = render(<DashboardScreen />)
 
@@ -156,6 +185,30 @@ describe('Dashboard screen (mobile)', () => {
 
     await waitFor(() => {
       expect(Alert.alert).toHaveBeenLastCalledWith('Error', 'Failed to logout')
+    })
+  })
+
+  it('approves a draft and refreshes the queue', async () => {
+    primeDashboardFetches()
+    ;(apiClient.approveDraft as jest.Mock).mockResolvedValueOnce({ data: {} })
+    ;(apiClient.get as jest.Mock)
+      .mockResolvedValueOnce(statsResponse)
+      .mockResolvedValueOnce({ data: [] })
+
+    const { getByText } = render(<DashboardScreen />)
+
+    await waitFor(() => {
+      expect(getByText('Approve')).toBeTruthy()
+    })
+
+    fireEvent.press(getByText('Approve'))
+
+    await waitFor(() => {
+      expect(apiClient.approveDraft).toHaveBeenCalledWith('draft-1', 'approve', undefined)
+    })
+
+    await waitFor(() => {
+      expect(getByText('Draft approved successfully.')).toBeTruthy()
     })
   })
 })

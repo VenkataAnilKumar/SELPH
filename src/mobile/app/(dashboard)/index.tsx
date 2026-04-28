@@ -11,6 +11,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native'
 import { useMobileAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
@@ -23,28 +24,108 @@ interface Twin {
   status: string
 }
 
+interface TwinStats {
+  total_messages: number
+  pending_drafts: number
+  processed_drafts: number
+  total_estimated_tokens: number
+  total_estimated_cost_usd: number
+  fallback_rate: number
+  generation_source_breakdown: Record<string, number>
+  model_breakdown: Record<string, number>
+  fallback_reason_breakdown: Record<string, number>
+}
+
+interface Draft {
+  id: string
+  content: string
+  status: string
+  confidence_score: number
+  confidence_label: string
+  confidence_reasoning?: string | null
+  generation_source?: string | null
+  llm_model?: string | null
+  fallback_reason?: string | null
+  estimated_total_tokens?: number | null
+  estimated_cost_usd?: number | null
+  created_at: string
+}
+
 export default function DashboardScreen() {
   const { user, logout } = useMobileAuth()
   const [twin, setTwin] = useState<Twin | null>(null)
+  const [stats, setStats] = useState<TwinStats | null>(null)
+  const [pendingDrafts, setPendingDrafts] = useState<Draft[]>([])
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
+  const [editDraftId, setEditDraftId] = useState<string | null>(null)
+  const [editedContent, setEditedContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchTwin = async () => {
+    const fetchDashboard = async () => {
       try {
-        const response = await apiClient.get('/twin/me')
-        setTwin(response.data)
+        const [twinResponse, statsResponse, draftsResponse] = await Promise.all([
+          apiClient.get('/twin/me'),
+          apiClient.get('/twin/stats'),
+          apiClient.get('/drafts/pending'),
+        ])
+        setTwin(twinResponse.data)
+        setStats(statsResponse.data)
+        setPendingDrafts(draftsResponse.data)
+        setError(null)
       } catch (err: any) {
         setError(
-          err.response?.data?.detail || 'Failed to load twin profile'
+          err.response?.data?.detail || 'Failed to load dashboard'
         )
       } finally {
         setLoading(false)
       }
     }
 
-    fetchTwin()
+    fetchDashboard()
   }, [])
+
+  const refreshDashboard = async () => {
+    const [statsResponse, draftsResponse] = await Promise.all([
+      apiClient.get('/twin/stats'),
+      apiClient.get('/drafts/pending'),
+    ])
+    setStats(statsResponse.data)
+    setPendingDrafts(draftsResponse.data)
+  }
+
+  const handleDraftAction = async (
+    draftId: string,
+    action: 'approve' | 'reject' | 'edit' | 'skip',
+    editedValue?: string
+  ) => {
+    setActionMessage(null)
+    setActionError(null)
+    setActiveDraftId(draftId)
+
+    try {
+      await apiClient.approveDraft(draftId, action, editedValue)
+      await refreshDashboard()
+      setActionMessage(
+        action === 'edit'
+          ? 'Draft updated and approved.'
+          : `Draft ${action}d successfully.`
+      )
+      if (action === 'edit') {
+        setEditDraftId(null)
+        setEditedContent('')
+      }
+    } catch (err: any) {
+      setActionError(
+        err.response?.data?.detail || `Failed to ${action} draft`
+      )
+    } finally {
+      setActiveDraftId(null)
+    }
+  }
 
   const handleLogout = async () => {
     Alert.alert(
@@ -84,7 +165,6 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>SELPH Dashboard</Text>
@@ -98,18 +178,28 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Error */}
       {error && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
-      {/* Twin Profile Card */}
+      {actionMessage && (
+        <View style={styles.successBox}>
+          <Text style={styles.successText}>{actionMessage}</Text>
+        </View>
+      )}
+
+      {actionError && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{actionError}</Text>
+        </View>
+      )}
+
       {twin && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Twin Profile</Text>
-          
+
           <View style={styles.profileItem}>
             <Text style={styles.profileLabel}>Domain</Text>
             <Text style={styles.profileValue}>{twin.domain}</Text>
@@ -138,66 +228,196 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* Quick Actions */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Quick Actions</Text>
-        
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionButtonText}>View Messages</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionButtonText}>Approve Drafts</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionButtonText}>Update Twin Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionButtonText}>View Settings</Text>
-        </TouchableOpacity>
+        <Text style={styles.cardTitle}>Approval Loop</Text>
+        {stats ? (
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.profileLabel}>Pending Drafts</Text>
+              <Text style={styles.statValue}>{stats.pending_drafts}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.profileLabel}>Processed Drafts</Text>
+              <Text style={styles.statValue}>{stats.processed_drafts}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.profileLabel}>Messages Seen</Text>
+              <Text style={styles.statValue}>{stats.total_messages}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.profileLabel}>Fallback Rate</Text>
+              <Text style={styles.statValue}>
+                {(stats.fallback_rate * 100).toFixed(0)}%
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>No stats available yet.</Text>
+        )}
       </View>
 
-      {/* Getting Started */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Getting Started</Text>
-        
-        <View style={styles.stepItem}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>1</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Connect Channels</Text>
-            <Text style={styles.stepDescription}>
-              Link your Instagram, Gmail, or other channels to start receiving messages.
-            </Text>
-          </View>
-        </View>
+        <Text style={styles.cardTitle}>Pending Drafts</Text>
+        <Text style={styles.sectionSubtitle}>
+          Review generated replies before SELPH sends anything.
+        </Text>
 
-        <View style={styles.stepItem}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>2</Text>
+        {pendingDrafts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No drafts are waiting for approval.</Text>
           </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Customize Your Twin</Text>
-            <Text style={styles.stepDescription}>
-              Set your twin's domain, tone, vocabulary, and communication style.
-            </Text>
-          </View>
-        </View>
+        ) : (
+          pendingDrafts.map((draft) => {
+            const isEditing = editDraftId === draft.id
+            const isSubmitting = activeDraftId === draft.id
 
-        <View style={styles.stepItem}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>3</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Review & Approve</Text>
-            <Text style={styles.stepDescription}>
-              Your twin will generate responses, and you'll review and approve before they're sent.
-            </Text>
-          </View>
-        </View>
+            return (
+              <View key={draft.id} style={styles.draftCard}>
+                <View style={styles.badgeRow}>
+                  <Text style={styles.confidenceBadge}>
+                    {draft.confidence_label} confidence
+                  </Text>
+                  <Text style={styles.sourceBadge}>
+                    {draft.generation_source || 'unknown source'}
+                  </Text>
+                </View>
+
+                <Text style={styles.draftContent}>{draft.content}</Text>
+                <Text style={styles.metaText}>
+                  Confidence score: {draft.confidence_score.toFixed(2)}
+                </Text>
+                <Text style={styles.metaText}>
+                  Estimated tokens: {draft.estimated_total_tokens ?? 0}
+                </Text>
+                <Text style={styles.metaText}>
+                  Estimated cost: ${Number(draft.estimated_cost_usd ?? 0).toFixed(4)}
+                </Text>
+                <Text style={styles.metaText}>
+                  Model: {draft.llm_model || 'No model recorded'}
+                </Text>
+                <Text style={styles.metaText}>
+                  Fallback reason: {draft.fallback_reason || 'None'}
+                </Text>
+                {draft.confidence_reasoning ? (
+                  <Text style={styles.reasoningText}>{draft.confidence_reasoning}</Text>
+                ) : null}
+
+                {isEditing ? (
+                  <View style={styles.editBox}>
+                    <Text style={styles.editLabel}>Edited response</Text>
+                    <TextInput
+                      value={editedContent}
+                      onChangeText={setEditedContent}
+                      multiline
+                      style={styles.editInput}
+                    />
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={styles.primaryButton}
+                        onPress={() => handleDraftAction(draft.id, 'edit', editedContent)}
+                        disabled={isSubmitting || editedContent.trim().length === 0}
+                      >
+                        <Text style={styles.primaryButtonText}>Save Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={() => {
+                          setEditDraftId(null)
+                          setEditedContent('')
+                        }}
+                      >
+                        <Text style={styles.secondaryButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.approveButton}
+                    onPress={() => handleDraftAction(draft.id, 'approve')}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.approveButtonText}>Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => {
+                      setEditDraftId(draft.id)
+                      setEditedContent(draft.content)
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.rejectButton}
+                    onPress={() => handleDraftAction(draft.id, 'reject')}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.rejectButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => handleDraftAction(draft.id, 'skip')}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.secondaryButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
+          })
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Model Signals</Text>
+        {stats ? (
+          <>
+            <Text style={styles.signalTitle}>Generation Sources</Text>
+            {Object.entries(stats.generation_source_breakdown).map(([source, count]) => (
+              <View key={source} style={styles.signalRow}>
+                <Text style={styles.signalLabel}>{source}</Text>
+                <Text style={styles.signalValue}>{count}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.signalTitle}>Models</Text>
+            {Object.entries(stats.model_breakdown).map(([model, count]) => (
+              <View key={model} style={styles.signalRow}>
+                <Text style={styles.signalLabel}>{model}</Text>
+                <Text style={styles.signalValue}>{count}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.signalTitle}>Fallback Reasons</Text>
+            {Object.keys(stats.fallback_reason_breakdown).length === 0 ? (
+              <Text style={styles.emptyText}>No fallbacks recorded.</Text>
+            ) : (
+              Object.entries(stats.fallback_reason_breakdown).map(([reason, count]) => (
+                <View key={reason} style={styles.signalRow}>
+                  <Text style={styles.signalLabel}>{reason}</Text>
+                  <Text style={styles.signalValue}>{count}</Text>
+                </View>
+              ))
+            )}
+
+            <View style={styles.spendCard}>
+              <Text style={styles.profileLabel}>Estimated spend</Text>
+              <Text style={styles.spendValue}>
+                ${stats.total_estimated_cost_usd.toFixed(4)}
+              </Text>
+              <Text style={styles.metaText}>
+                {stats.total_estimated_tokens} tokens processed so far
+              </Text>
+            </View>
+          </>
+        ) : (
+          <Text style={styles.emptyText}>Stats will appear after draft activity.</Text>
+        )}
       </View>
 
       <View style={{ height: 40 }} />
@@ -251,6 +471,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  successBox: {
+    backgroundColor: '#dcfce7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#16a34a',
+    padding: 12,
+    margin: 16,
+    borderRadius: 6,
+  },
+  successText: {
+    color: '#166534',
+    fontSize: 13,
+  },
   errorBox: {
     backgroundColor: '#fee2e2',
     borderLeftWidth: 4,
@@ -277,6 +509,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: -8,
+    marginBottom: 16,
+    lineHeight: 18,
   },
   profileItem: {
     marginBottom: 12,
@@ -310,48 +549,205 @@ const styles = StyleSheet.create({
     color: '#111827',
     textTransform: 'capitalize',
   },
-  actionButton: {
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  stepItem: {
+  statsGrid: {
     flexDirection: 'row',
-    marginBottom: 16,
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
   },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  statCard: {
+    width: '50%',
+    padding: 4,
   },
-  stepNumberText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  stepContent: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  statValue: {
+    marginTop: 8,
+    fontSize: 24,
+    fontWeight: '700',
     color: '#111827',
+  },
+  emptyState: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#d1d5db',
+    padding: 16,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  draftCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  confidenceBadge: {
+    backgroundColor: '#dbeafe',
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  sourceBadge: {
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  draftContent: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#111827',
+    marginBottom: 12,
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#4b5563',
     marginBottom: 4,
   },
-  stepDescription: {
+  reasoningText: {
     fontSize: 12,
     color: '#6b7280',
+    marginTop: 8,
     lineHeight: 18,
+  },
+  editBox: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  editLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  editInput: {
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    padding: 12,
+    textAlignVertical: 'top',
+    color: '#111827',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#e11d48',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#e5e7eb',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  signalTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  signalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  signalLabel: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4b5563',
+    paddingRight: 12,
+  },
+  signalValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  spendCard: {
+    marginTop: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+  },
+  spendValue: {
+    marginTop: 8,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
   },
 })
