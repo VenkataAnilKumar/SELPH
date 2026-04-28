@@ -15,7 +15,7 @@ class Twin(BaseModel):
     domain = Column(String, default="professional", nullable=False)  # e.g., "professional", "personal"
     tone = Column(String, default="friendly", nullable=False)  # e.g., "formal", "casual", "friendly"
     vocab = Column(JSON, default=list, nullable=False)  # List of tone/vocabulary keywords
-    avg_response_length = Column(Integer, default=150, nullable=False)  # average chars
+    avg_response_length = Column(Integer, default=150, nullable=False)  # average words
     status = Column(String, default="active", nullable=False)  # "active" or "paused"
     
     # Relationships

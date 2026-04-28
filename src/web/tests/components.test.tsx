@@ -77,7 +77,7 @@ describe('authStorage (web)', () => {
   it('returns null for malformed stored user payload', () => {
     localStorage.setItem('selph_user', '{bad json')
 
-    expect(() => authStorage.getUser()).toThrow()
+    expect(authStorage.getUser()).toBeNull()
   })
 })
 

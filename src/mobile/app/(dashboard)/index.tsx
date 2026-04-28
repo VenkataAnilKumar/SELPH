@@ -122,14 +122,18 @@ export default function DashboardScreen() {
   }, [])
 
   const refreshDashboard = async () => {
-    const [statsResponse, draftsResponse, channelsResponse] = await Promise.all([
-      apiClient.get('/twin/stats'),
-      apiClient.get('/drafts/pending'),
-      apiClient.get('/channels/connected'),
-    ])
-    setStats(statsResponse.data)
-    setPendingDrafts(draftsResponse.data)
-    setChannels(channelsResponse.data)
+    try {
+      const [statsResponse, draftsResponse, channelsResponse] = await Promise.all([
+        apiClient.get('/twin/stats'),
+        apiClient.get('/drafts/pending'),
+        apiClient.get('/channels/connected'),
+      ])
+      setStats(statsResponse.data)
+      setPendingDrafts(draftsResponse.data)
+      setChannels(channelsResponse.data)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to refresh dashboard')
+    }
   }
 
   // Auto-refresh: foreground resume + 30-second interval
