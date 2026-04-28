@@ -54,6 +54,21 @@ class TwinQualitySummaryResponse(BaseModel):
     recommendation: str
 
 
+class TwinWeeklyDigestResponse(BaseModel):
+    """Phase 8 weekly digest summary payload."""
+
+    twin_id: str
+    week_start: datetime
+    week_end: datetime
+    messages_received_7d: int
+    drafts_generated_7d: int
+    drafts_handled_7d: int
+    approval_rate_7d: float
+    top_channel: Optional[str] = None
+    pending_drafts: int
+    summary_line: str
+
+
 class UpdateTwinRequest(BaseModel):
     """Request to update twin profile"""
     domain: Optional[str] = None

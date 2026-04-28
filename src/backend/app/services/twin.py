@@ -203,3 +203,63 @@ class TwinService:
             "quality_label": quality_label,
             "recommendation": recommendation,
         }
+
+    @staticmethod
+    def get_weekly_digest_summary(db: Session, user_id: str) -> dict:
+        """Return a compact weekly digest summary for beta launch reporting."""
+        from app.models import Draft, Message
+
+        twin = TwinService.get_twin(db, user_id)
+        if not twin:
+            return None
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        since = now - timedelta(days=7)
+
+        messages_7d = db.query(Message).filter(
+            Message.user_id == user_id,
+            Message.created_at >= since,
+        )
+        drafts_7d = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.created_at >= since,
+        )
+
+        messages_received_7d = messages_7d.count()
+        drafts_generated_7d = drafts_7d.count()
+
+        drafts_handled_7d = drafts_7d.filter(Draft.status.in_(["approved", "edited", "sent"])).count()
+
+        approved_edited_count = drafts_7d.filter(Draft.status.in_(["approved", "edited"])).count()
+        rejected_count = drafts_7d.filter(Draft.status == "rejected").count()
+        decided_count = approved_edited_count + rejected_count
+        approval_rate_7d = round(approved_edited_count / decided_count, 4) if decided_count > 0 else 0.0
+
+        top_channel_row = messages_7d.with_entities(
+            Message.channel,
+            func.count(Message.id).label("count"),
+        ).group_by(Message.channel).order_by(func.count(Message.id).desc()).first()
+        top_channel = top_channel_row[0] if top_channel_row else None
+
+        pending_drafts = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        ).count()
+
+        summary_line = (
+            f"Your twin handled {drafts_handled_7d} messages this week "
+            f"with {int(round(approval_rate_7d * 100))}% approval."
+        )
+
+        return {
+            "twin_id": twin.id,
+            "week_start": since,
+            "week_end": now,
+            "messages_received_7d": messages_received_7d,
+            "drafts_generated_7d": drafts_generated_7d,
+            "drafts_handled_7d": drafts_handled_7d,
+            "approval_rate_7d": approval_rate_7d,
+            "top_channel": top_channel,
+            "pending_drafts": pending_drafts,
+            "summary_line": summary_line,
+        }

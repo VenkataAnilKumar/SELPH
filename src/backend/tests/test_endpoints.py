@@ -134,11 +134,18 @@ class TestTwinEndpoints:
     """Test twin endpoints"""
 
     @staticmethod
-    def _seed_quality_draft(test_db, user, *, status: str, latency: int = 400):
+    def _seed_quality_draft(
+        test_db,
+        user,
+        *,
+        status: str,
+        latency: int = 400,
+        channel: str = "instagram_dm",
+    ):
         message = MessageService.create_message(
             test_db,
             user.id,
-            "instagram_dm",
+            channel,
             f"sender-{status}-{latency}",
             "Quality Sender",
             "Quality check message",
@@ -248,6 +255,29 @@ class TestTwinEndpoints:
 
     def test_get_twin_quality_summary_unauthorized(self, client):
         response = client.get("/v1/twin/quality-summary")
+        assert response.status_code == 403
+
+    def test_get_twin_weekly_digest(self, client, auth_headers, test_db, test_user_data):
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        self._seed_quality_draft(test_db, user, status="approved", latency=300, channel="gmail")
+        self._seed_quality_draft(test_db, user, status="edited", latency=450, channel="gmail")
+        self._seed_quality_draft(test_db, user, status="rejected", latency=700, channel="instagram_dm")
+
+        response = client.get("/v1/twin/weekly-digest", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["twin_id"] == user.twin.id
+        assert data["messages_received_7d"] == 3
+        assert data["drafts_generated_7d"] == 3
+        assert data["drafts_handled_7d"] == 2
+        assert data["approval_rate_7d"] == pytest.approx(0.6667, abs=0.001)
+        assert data["top_channel"] == "gmail"
+        assert isinstance(data["summary_line"], str)
+        assert "handled" in data["summary_line"]
+
+    def test_get_twin_weekly_digest_unauthorized(self, client):
+        response = client.get("/v1/twin/weekly-digest")
         assert response.status_code == 403
 
 
