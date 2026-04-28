@@ -63,8 +63,9 @@ npm install -g expo-cli
 1. **Backend (FastAPI)**
    ```bash
    cd src/backend
-   python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
+   python -m venv .venv
+   source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows PowerShell
+   python -m pip install --upgrade pip setuptools wheel
    pip install -r requirements.txt
    docker-compose up -d       # PostgreSQL + Redis
    alembic upgrade head       # Run migrations
@@ -167,6 +168,7 @@ NEXT_PUBLIC_FIREBASE_CONFIG={...}
 ### Backend Tests
 ```bash
 cd src/backend
+. .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows PowerShell
 pytest tests/ -v
 ```
 

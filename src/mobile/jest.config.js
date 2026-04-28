@@ -1,9 +1,6 @@
 module.exports = {
-  // Use React Native preset
-  preset: 'react-native',
-
-  // Test environment
-  testEnvironment: 'node',
+  // Use Expo preset for React Native + Expo projects
+  preset: 'jest-expo',
 
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
@@ -12,15 +9,6 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@selph/shared$': '<rootDir>/../shared/src/index.ts',
-  },
-
-  // Transform files
-  transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', {
-      tsconfig: {
-        jsx: 'react-jsx',
-      },
-    }],
   },
 
   // Test file patterns

@@ -1,5 +1,4 @@
 // Jest setup file for mobile tests
-import '@react-native-community/hooks'
 
 // Mock Expo modules
 jest.mock('expo-router', () => ({
