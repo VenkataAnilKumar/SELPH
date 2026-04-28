@@ -69,13 +69,23 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
             message.status = "draft_ready"
             db.commit()
             
-            logger.info(f"Draft {draft.id} created for message {message_id}")
+            logger.info(
+                "Draft %s created for message %s source=%s pipeline_latency_ms=%s llm_latency_ms=%s parse_retry_count=%s",
+                draft.id,
+                message_id,
+                pipeline.get("generation_source"),
+                pipeline.get("metrics", {}).get("pipeline_latency_ms"),
+                pipeline.get("metrics", {}).get("llm_latency_ms"),
+                pipeline.get("metrics", {}).get("parse_retry_count"),
+            )
             
             return {
                 "status": "success",
                 "draft_id": draft.id,
                 "confidence": pipeline["confidence_score"],
                 "moderation_passed": pipeline["moderation_passed"],
+                "generation_source": pipeline.get("generation_source"),
+                "metrics": pipeline.get("metrics", {}),
             }
         
         finally:
