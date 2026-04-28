@@ -2,7 +2,7 @@
 User model — authentication and identity
 """
 
-from sqlalchemy import Column, String, Boolean, Index
+from sqlalchemy import Column, String, Boolean
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 
@@ -26,6 +26,3 @@ class User(BaseModel):
     channel_credentials = relationship("ChannelCredential", back_populates="user", cascade="all, delete-orphan")
     topics = relationship("Topic", back_populates="user", cascade="all, delete-orphan")
 
-    __table_args__ = (
-        Index("ix_users_email", "email"),
-    )

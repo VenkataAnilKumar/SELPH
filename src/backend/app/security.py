@@ -4,14 +4,38 @@ Security utilities for password hashing and JWT tokens
 
 from datetime import datetime, timedelta
 from typing import Optional
+import logging
 import jwt
 from passlib.context import CryptContext
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def _build_pwd_context() -> CryptContext:
+    """Build a password context with a safe runtime fallback.
+
+    Some Python/passlib/bcrypt combinations (notably bcrypt>=4.1 with older
+    passlib) can raise runtime errors during backend capability checks.
+    """
+    bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    try:
+        probe = "security-probe-password"
+        probe_hash = bcrypt_context.hash(probe)
+        if not bcrypt_context.verify(probe, probe_hash):
+            raise RuntimeError("bcrypt self-test failed")
+        return bcrypt_context
+    except Exception as exc:
+        logger.warning(
+            "bcrypt unavailable or incompatible; falling back to pbkdf2_sha256: %s",
+            exc,
+        )
+        return CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
 
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = _build_pwd_context()
 
 
 def hash_password(password: str) -> str:

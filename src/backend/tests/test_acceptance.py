@@ -22,7 +22,7 @@ class TestPhase0AcceptanceCriteria:
         assert response.status_code == 201
         
         signup_data = response.json()
-        access_token = signup_data["access_token"]
+        access_token = signup_data["tokens"]["access_token"]
         user_email = signup_data["user"]["email"]
         
         # Verify user data
@@ -58,11 +58,14 @@ class TestPhase0AcceptanceCriteria:
         # Step 2: Logout (simulated)
         
         # Step 3: Login again
-        response = client.post("/v1/auth/login", json=test_user_data)
+        response = client.post(
+            "/v1/auth/login",
+            json={"email": test_user_data["email"], "password": test_user_data["password"]},
+        )
         assert response.status_code == 200
         
         login_data = response.json()
-        access_token = login_data["access_token"]
+        access_token = login_data["tokens"]["access_token"]
         
         # Step 4: Verify access to protected routes
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -125,7 +128,7 @@ class TestPhase0AcceptanceCriteria:
         response = client.get("/v1/twin/stats", headers=auth_headers)
         assert response.status_code == 200
         stats = response.json()
-        assert stats["message_count"] == initial_count
+        assert stats["total_messages"] == initial_count
 
     def test_draft_lifecycle_flow(self, client, auth_headers):
         """
@@ -201,7 +204,7 @@ class TestPhase0AcceptanceCriteria:
         # Step 2: Signup and get auth token
         response = client.post("/v1/auth/signup", json=test_user_data)
         assert response.status_code == 201
-        access_token = response.json()["access_token"]
+        access_token = response.json()["tokens"]["access_token"]
         headers = {"Authorization": f"Bearer {access_token}"}
         
         # Step 3: Access protected routes with auth
@@ -227,20 +230,22 @@ class TestPhase0AcceptanceCriteria:
         user_a_data = {
             "email": "usera@example.com",
             "password": "PasswordA123",
+            "name": "User A",
         }
         response = client.post("/v1/auth/signup", json=user_a_data)
         assert response.status_code == 201
-        user_a_token = response.json()["access_token"]
+        user_a_token = response.json()["tokens"]["access_token"]
         user_a_headers = {"Authorization": f"Bearer {user_a_token}"}
         
         # Step 2: Create User B
         user_b_data = {
             "email": "userb@example.com",
             "password": "PasswordB123",
+            "name": "User B",
         }
         response = client.post("/v1/auth/signup", json=user_b_data)
         assert response.status_code == 201
-        user_b_token = response.json()["access_token"]
+        user_b_token = response.json()["tokens"]["access_token"]
         user_b_headers = {"Authorization": f"Bearer {user_b_token}"}
         
         # Step 3: Verify User A gets their own twin
@@ -268,12 +273,12 @@ class TestPhase0AcceptanceCriteria:
         # Step 1: Invalid email format
         response = client.post(
             "/v1/auth/signup",
-            json={"email": "invalid", "password": "TestPassword123"},
+            json={"email": "invalid", "password": "TestPassword123", "name": "Test"},
         )
         assert response.status_code == 422
         
         # Step 2: Missing required fields
-        response = client.post("/v1/auth/signup", json={"email": "test@example.com"})
+        response = client.post("/v1/auth/signup", json={"email": "test@example.com", "name": "Test"})
         assert response.status_code == 422
         
         # Step 3: Nonexistent user login
@@ -288,7 +293,7 @@ class TestPhase0AcceptanceCriteria:
             "/v1/twin/me",
             headers={"Authorization": "Bearer invalid_token"},
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_complete_user_journey(self, client, test_user_data, test_twin_data):
         """
@@ -303,7 +308,7 @@ class TestPhase0AcceptanceCriteria:
         response = client.post("/v1/auth/signup", json=test_user_data)
         assert response.status_code == 201
         data = response.json()
-        access_token = data["access_token"]
+        access_token = data["tokens"]["access_token"]
         headers = {"Authorization": f"Bearer {access_token}"}
         
         # Step 2: Verify authentication
@@ -320,7 +325,7 @@ class TestPhase0AcceptanceCriteria:
         response = client.get("/v1/twin/stats", headers=headers)
         assert response.status_code == 200
         stats = response.json()
-        assert stats["message_count"] == 0
+        assert stats["total_messages"] == 0
         
         # Step 5: Configure twin
         response = client.put(

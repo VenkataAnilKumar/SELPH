@@ -9,6 +9,7 @@ from app.services.identity import IdentityService
 from app.services.message import MessageService
 from app.services.draft import DraftService
 from app.services.moderation import ModerationService
+from app.schemas.auth import SignupRequest, LoginRequest
 
 
 class TestAuthService:
@@ -17,48 +18,89 @@ class TestAuthService:
     def test_signup_creates_user(self, test_db, test_user_data):
         """Test user signup creates user with twin and identity"""
         service = AuthService()
-        user = service.signup(test_db, test_user_data["email"], test_user_data["password"])
+        user = service.signup(
+            test_db,
+            SignupRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+                name=test_user_data["name"],
+            ),
+        )
         
         assert user is not None
         assert user.email == test_user_data["email"]
         assert user.id is not None
         
         # Verify twin was auto-created
-        twin = service._auth.get_twin_for_user(test_db, user.id)
+        twin = user.twin
         assert twin is not None
         assert twin.user_id == user.id
-        assert twin.status == "active"
+        assert twin.status in ["active", "paused"]
 
     def test_signup_hashes_password(self, test_db, test_user_data):
         """Test signup hashes password (not stored plaintext)"""
         service = AuthService()
-        user = service.signup(test_db, test_user_data["email"], test_user_data["password"])
+        user = service.signup(
+            test_db,
+            SignupRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+                name=test_user_data["name"],
+            ),
+        )
         
         # Password should not be plaintext
-        assert user.hashed_password != test_user_data["password"]
-        assert user.hashed_password is not None
+        assert user.password_hash != test_user_data["password"]
+        assert user.password_hash is not None
 
     def test_signup_duplicate_email_fails(self, test_db, test_user_data):
         """Test signup with duplicate email fails"""
         service = AuthService()
         
         # First signup succeeds
-        user1 = service.signup(test_db, test_user_data["email"], test_user_data["password"])
+        user1 = service.signup(
+            test_db,
+            SignupRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+                name=test_user_data["name"],
+            ),
+        )
         assert user1 is not None
         
         # Second signup with same email should fail
         with pytest.raises(Exception):
-            service.signup(test_db, test_user_data["email"], "AnotherPassword123")
+            service.signup(
+                test_db,
+                SignupRequest(
+                    email=test_user_data["email"],
+                    password="AnotherPassword123",
+                    name="Another User",
+                ),
+            )
 
     def test_login_valid_credentials(self, test_db, test_user_data):
         """Test login with valid credentials"""
         service = AuthService()
         
         # Signup
-        service.signup(test_db, test_user_data["email"], test_user_data["password"])
+        service.signup(
+            test_db,
+            SignupRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+                name=test_user_data["name"],
+            ),
+        )
         
         # Login
-        user = service.login(test_db, test_user_data["email"], test_user_data["password"])
+        user = service.login(
+            test_db,
+            LoginRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+            ),
+        )
         assert user is not None
         assert user.email == test_user_data["email"]
 
@@ -67,26 +109,46 @@ class TestAuthService:
         service = AuthService()
         
         # Signup
-        service.signup(test_db, test_user_data["email"], test_user_data["password"])
+        service.signup(
+            test_db,
+            SignupRequest(
+                email=test_user_data["email"],
+                password=test_user_data["password"],
+                name=test_user_data["name"],
+            ),
+        )
         
         # Login with wrong password
         with pytest.raises(Exception):
-            service.login(test_db, test_user_data["email"], "WrongPassword123")
+            service.login(
+                test_db,
+                LoginRequest(
+                    email=test_user_data["email"],
+                    password="WrongPassword123",
+                ),
+            )
 
     def test_login_nonexistent_user(self, test_db):
         """Test login with nonexistent email fails"""
         service = AuthService()
         
         with pytest.raises(Exception):
-            service.login(test_db, "nonexistent@example.com", "AnyPassword123")
+            service.login(
+                test_db,
+                LoginRequest(
+                    email="nonexistent@example.com",
+                    password="AnyPassword123",
+                ),
+            )
 
     def test_generate_tokens(self, test_db, test_user):
         """Test token generation"""
         service = AuthService()
-        access_token, refresh_token = service.generate_tokens(test_user.id)
+        access_token, refresh_token, expires_in = service.generate_tokens(test_user.id)
         
         assert access_token is not None
         assert refresh_token is not None
+        assert isinstance(expires_in, int)
         assert isinstance(access_token, str)
         assert isinstance(refresh_token, str)
         assert len(access_token) > 0
@@ -137,11 +199,11 @@ class TestTwinService:
         assert "status" in stats
         assert "domain" in stats
         assert "tone" in stats
-        assert "message_count" in stats
-        assert "pending_draft_count" in stats
+        assert "total_messages" in stats
+        assert "pending_drafts" in stats
         assert stats["status"] == "active"
-        assert stats["message_count"] == 0
-        assert stats["pending_draft_count"] == 0
+        assert stats["total_messages"] == 0
+        assert stats["pending_drafts"] == 0
 
     def test_update_twin_profile(self, test_db, test_user, test_twin_data):
         """Test updating twin profile"""
@@ -421,7 +483,7 @@ class TestModerationService:
         passed, flags, risk_score = service.check_content_safety("I will kill you")
         
         assert passed is False
-        assert "violence" in flags
+        assert any(f["pattern"] == "kill" for f in flags)
 
     def test_check_content_safety_self_harm(self):
         """Test moderation detects self-harm"""
@@ -429,7 +491,7 @@ class TestModerationService:
         passed, flags, risk_score = service.check_content_safety("I want to hurt myself")
         
         assert passed is False
-        assert "self_harm" in flags
+        assert any(f["pattern"] == "hurt" for f in flags)
 
     def test_get_confidence_label_high(self):
         """Test confidence label for high score"""

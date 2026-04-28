@@ -76,6 +76,7 @@ def test_user_data():
     return {
         "email": "test@example.com",
         "password": "TestPassword123",
+        "name": "Test User",
     }
 
 
@@ -83,9 +84,17 @@ def test_user_data():
 def test_user(test_db, test_user_data):
     """Create a test user"""
     from app.services.auth import AuthService
+    from app.schemas.auth import SignupRequest
     
     service = AuthService()
-    user = service.signup(test_db, test_user_data["email"], test_user_data["password"])
+    user = service.signup(
+        test_db,
+        SignupRequest(
+            email=test_user_data["email"],
+            password=test_user_data["password"],
+            name=test_user_data["name"],
+        ),
+    )
     return user
 
 
@@ -96,10 +105,13 @@ def auth_headers(client, test_user_data):
     client.post("/v1/auth/signup", json=test_user_data)
     
     # Login
-    response = client.post("/v1/auth/login", json=test_user_data)
+    response = client.post(
+        "/v1/auth/login",
+        json={"email": test_user_data["email"], "password": test_user_data["password"]},
+    )
     data = response.json()
     
-    return {"Authorization": f"Bearer {data['access_token']}"}
+    return {"Authorization": f"Bearer {data['tokens']['access_token']}"}
 
 
 @pytest.fixture(scope="function")
@@ -120,6 +132,6 @@ def test_twin_data():
     return {
         "domain": "business",
         "tone": "professional",
-        "vocab": "formal",
-        "avg_response_length": "medium",
+        "vocab": ["formal", "concise"],
+        "avg_response_length": 120,
     }

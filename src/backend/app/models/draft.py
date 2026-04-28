@@ -40,5 +40,4 @@ class Draft(BaseModel):
 
     __table_args__ = (
         Index("ix_drafts_user_id_status", "user_id", "status"),
-        Index("ix_drafts_twin_id", "twin_id"),
     )

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
         "http://localhost:3001",
         "http://localhost:8081",
     ]
-    allowed_hosts: List[str] = ["localhost", "127.0.0.1"]
+    allowed_hosts: List[str] = ["localhost", "127.0.0.1", "testserver"]
     
     # LLM Configuration
     default_llm_provider: str = "anthropic"
