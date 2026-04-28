@@ -59,3 +59,13 @@ class AuthResponse(BaseModel):
     """Complete auth response with user and tokens"""
     user: UserResponse
     tokens: TokenResponse
+
+
+class PushTokenRequest(BaseModel):
+    """Request body to register/update an Expo push token"""
+    token: str = Field(..., min_length=1, max_length=200)
+
+
+class PushTokenResponse(BaseModel):
+    """Response after registering push token"""
+    registered: bool

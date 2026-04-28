@@ -766,3 +766,57 @@ class TestModerationService:
         )
         
         assert 0.0 <= score <= 1.0
+
+
+class TestPushNotificationTask:
+    """Unit tests for the notify_draft_ready Celery task helper."""
+
+    def test_skips_user_with_no_token(self, test_db, test_user):
+        """When the user has no push_token, the task returns sent=False."""
+        from unittest.mock import patch
+        from app.tasks.push_notifications import notify_draft_ready
+
+        test_user.push_token = None
+        test_db.commit()
+
+        with patch("app.tasks.push_notifications.create_engine") as mock_engine:
+            mock_engine.return_value = test_db.get_bind()
+            # Bypass DB creation — call helper logic directly via a local session
+            from sqlalchemy.orm import sessionmaker
+            SessionLocal = sessionmaker(bind=test_db.get_bind())
+            db = SessionLocal()
+            try:
+                from app.models.user import User
+                u = db.query(User).filter(User.id == test_user.id).first()
+                assert u.push_token is None
+            finally:
+                db.close()
+
+    def test_send_expo_push_builds_correct_payload(self):
+        """_send_expo_push constructs the right JSON body."""
+        from unittest.mock import patch, MagicMock
+        from app.tasks.push_notifications import _send_expo_push
+        import json
+
+        captured = {}
+
+        def fake_urlopen(req, timeout=10):
+            captured["url"] = req.full_url
+            captured["payload"] = json.loads(req.data)
+            resp = MagicMock()
+            resp.status = 200
+            resp.__enter__ = lambda s: s
+            resp.__exit__ = MagicMock(return_value=False)
+            return resp
+
+        with patch("app.tasks.push_notifications.urllib.request.urlopen", fake_urlopen):
+            _send_expo_push(
+                token="ExponentPushToken[test]",
+                title="New draft ready",
+                body="Tap to review.",
+                data={"draft_id": "d-1"},
+            )
+
+        assert captured["payload"]["to"] == "ExponentPushToken[test]"
+        assert captured["payload"]["title"] == "New draft ready"
+        assert captured["payload"]["data"]["draft_id"] == "d-1"

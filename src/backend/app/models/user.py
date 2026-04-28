@@ -15,6 +15,7 @@ class User(BaseModel):
     password_hash = Column(String, nullable=False)
     name = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    push_token = Column(String, nullable=True)  # Expo push token for mobile notifications
     
     # Relationships
     twin = relationship("Twin", back_populates="user", uselist=False, cascade="all, delete-orphan")

@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { MobileAuthProvider, useMobileAuth } from '@/lib/auth-context'
+import { usePushNotifications } from '@/lib/use-push-notifications'
 
 /**
  * Layout wrapper that handles navigation based on auth state
@@ -14,6 +15,9 @@ function RootLayoutNav() {
   const segments = useSegments()
   const { isAuthenticated, loading } = useMobileAuth()
   const [isNavigationReady, setIsNavigationReady] = useState(false)
+
+  // Register Expo push token with the backend when the user is authenticated
+  usePushNotifications(isAuthenticated)
 
   useEffect(() => {
     if (!isNavigationReady) return

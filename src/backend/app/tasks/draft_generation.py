@@ -79,7 +79,11 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
             # Mark message as draft_ready
             message.status = "draft_ready"
             db.commit()
-            
+
+            # Fire push notification (non-blocking; failure is logged, not raised)
+            from app.tasks.push_notifications import notify_draft_ready
+            notify_draft_ready.delay(user_id, draft.id)
+
             logger.info(
                 "Draft %s created for message %s source=%s pipeline_latency_ms=%s llm_latency_ms=%s parse_retry_count=%s",
                 draft.id,

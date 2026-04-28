@@ -92,6 +92,11 @@ class ApiClient {
     return this.client.get('/health')
   }
 
+  // Push token registration
+  async registerPushToken(token: string) {
+    return this.client.post('/auth/push-token', { token })
+  }
+
   // Generic HTTP methods (for direct use in pages/contexts)
   async get(url: string, config?: any) {
     return this.client.get(url, config)
