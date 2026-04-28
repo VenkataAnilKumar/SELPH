@@ -41,7 +41,10 @@ class OnboardingRequest(BaseModel):
     @field_validator("topics_avoided")
     @classmethod
     def at_least_one_avoided(cls, v: List[str]) -> List[str]:
-        return [t.strip() for t in v if t.strip()]
+        cleaned = [t.strip() for t in v if t.strip()]
+        if not cleaned:
+            raise ValueError("At least one avoided topic is required")
+        return cleaned
 
     @field_validator("three_words")
     @classmethod

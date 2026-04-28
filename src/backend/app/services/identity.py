@@ -9,6 +9,29 @@ from app.models import IdentityProfile, Topic, Twin
 
 class IdentityService:
     """Service for managing twin identity profiles"""
+
+    @staticmethod
+    def _replace_topics(db: Session, user_id: str, topic_type: str, topics: list) -> None:
+        """Replace all topics of a given type with the provided list."""
+        cleaned = []
+        for topic in topics:
+            normalized = topic.strip()
+            if normalized and normalized not in cleaned:
+                cleaned.append(normalized)
+
+        db.query(Topic).filter(
+            and_(
+                Topic.user_id == user_id,
+                Topic.topic_type == topic_type,
+            )
+        ).delete(synchronize_session=False)
+
+        for topic in cleaned:
+            db.add(Topic(
+                user_id=user_id,
+                topic=topic,
+                topic_type=topic_type,
+            ))
     
     @staticmethod
     def get_identity_profile(db: Session, user_id: str) -> IdentityProfile:
@@ -39,50 +62,24 @@ class IdentityService:
         if not profile:
             profile = IdentityProfile(user_id=user_id)
         
-        if vocabulary_description:
+        if vocabulary_description is not None:
             profile.vocabulary_description = vocabulary_description
-        if communication_style:
+        if communication_style is not None:
             profile.communication_style = communication_style
-        if topics_known:
+        if topics_known is not None:
             profile.topics_known_text = ", ".join(topics_known)
-        if topics_avoided:
+        if topics_avoided is not None:
             profile.topics_avoided_text = ", ".join(topics_avoided)
         
         db.add(profile)
         db.flush()
         
-        # Add topics to topics table
-        if topics_known:
-            for topic in topics_known:
-                existing = db.query(Topic).filter(
-                    and_(
-                        Topic.user_id == user_id,
-                        Topic.topic == topic,
-                        Topic.topic_type == "known",
-                    )
-                ).first()
-                if not existing:
-                    db.add(Topic(
-                        user_id=user_id,
-                        topic=topic,
-                        topic_type="known",
-                    ))
-        
-        if topics_avoided:
-            for topic in topics_avoided:
-                existing = db.query(Topic).filter(
-                    and_(
-                        Topic.user_id == user_id,
-                        Topic.topic == topic,
-                        Topic.topic_type == "avoided",
-                    )
-                ).first()
-                if not existing:
-                    db.add(Topic(
-                        user_id=user_id,
-                        topic=topic,
-                        topic_type="avoided",
-                    ))
+        # Replace topics table rows only for provided fields.
+        if topics_known is not None:
+            IdentityService._replace_topics(db, user_id, "known", topics_known)
+
+        if topics_avoided is not None:
+            IdentityService._replace_topics(db, user_id, "avoided", topics_avoided)
         
         db.commit()
         db.refresh(profile)

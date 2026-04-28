@@ -76,6 +76,12 @@ class TestOnboarding:
         response = client.post("/v1/identity/onboard", json=bad, headers=auth_headers)
         assert response.status_code == 422
 
+    def test_onboarding_rejects_empty_topics_avoided(self, client, auth_headers):
+        """topics_avoided must contain at least one non-empty topic."""
+        bad = {**ONBOARDING_PAYLOAD, "topics_avoided": ["   ", ""]}
+        response = client.post("/v1/identity/onboard", json=bad, headers=auth_headers)
+        assert response.status_code == 422
+
     def test_onboarding_requires_auth(self, client):
         """Unauthenticated request returns 403 (middleware behaviour)."""
         response = client.post("/v1/identity/onboard", json=ONBOARDING_PAYLOAD)
@@ -119,6 +125,34 @@ class TestIdentityProfile:
         assert data["vocabulary_description"] == "bold, funny, sharp"
         # communication_style unchanged from onboarding
         assert data["communication_style"] is not None
+
+    def test_patch_profile_allows_clearing_vocabulary_with_empty_string(self, client, auth_headers):
+        """Supplying an empty string should clear vocabulary_description."""
+        client.post("/v1/identity/onboard", json=ONBOARDING_PAYLOAD, headers=auth_headers)
+
+        response = client.patch(
+            "/v1/identity/profile",
+            json={"vocabulary_description": ""},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["vocabulary_description"] == ""
+
+    def test_patch_profile_allows_clearing_topics_with_empty_list(self, client, auth_headers):
+        """Supplying an empty list should clear known and avoided topics."""
+        client.post("/v1/identity/onboard", json=ONBOARDING_PAYLOAD, headers=auth_headers)
+        client.post("/v1/identity/topics/known", json={"topic": "photography"}, headers=auth_headers)
+
+        response = client.patch(
+            "/v1/identity/profile",
+            json={"topics_known": [], "topics_avoided": []},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["topics_known"] == []
+        assert data["topics_avoided"] == []
 
     def test_patch_profile_requires_auth(self, client):
         """Unauthenticated PATCH returns 403 (middleware behaviour)."""
