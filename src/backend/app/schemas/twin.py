@@ -39,6 +39,8 @@ class TwinStatsResponse(BaseModel):
     model_breakdown: dict[str, int]
     fallback_reason_breakdown: dict[str, int]
 
+    model_config = ConfigDict(protected_namespaces=())
+
 
 class UpdateTwinRequest(BaseModel):
     """Request to update twin profile"""

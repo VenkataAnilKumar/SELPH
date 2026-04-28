@@ -20,11 +20,6 @@ from app.models import Message, Twin, IdentityProfile, Topic
 from app.services.moderation import ModerationService
 from app.config import get_settings
 
-try:
-    from litellm import completion
-except Exception:  # pragma: no cover
-    completion = None
-
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -129,8 +124,10 @@ class TwinEngineService:
 
     @staticmethod
     def _call_litellm(messages: list[dict]) -> str:
-        if completion is None:
-            raise RuntimeError("litellm not available")
+        try:
+            from litellm import completion
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError("litellm not available") from exc
 
         response = completion(
             model=settings.default_llm_model,
