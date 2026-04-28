@@ -75,6 +75,18 @@ class TwinService:
 
         fallback_rate = round((fallback_count / total_drafts), 4) if total_drafts > 0 else 0.0
 
+        # Approval rate = (approved + edited) / (approved + edited + rejected)
+        approved_count = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status.in_(["approved", "edited"]),
+        ).count()
+        rejected_count = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "rejected",
+        ).count()
+        decided_count = approved_count + rejected_count
+        approval_rate = round(approved_count / decided_count, 4) if decided_count > 0 else 0.0
+
         generation_source_breakdown = {}
         for source, count in db.query(Draft.generation_source, func.count(Draft.id)).filter(
             Draft.user_id == user_id,
@@ -105,6 +117,7 @@ class TwinService:
             "total_estimated_tokens": int(total_tokens),
             "total_estimated_cost_usd": float(round(total_cost, 8)),
             "fallback_rate": fallback_rate,
+            "approval_rate": approval_rate,
             "generation_source_breakdown": generation_source_breakdown,
             "model_breakdown": model_breakdown,
             "fallback_reason_breakdown": fallback_reason_breakdown,

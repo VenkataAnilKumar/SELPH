@@ -34,6 +34,7 @@ class TwinStatsResponse(BaseModel):
     total_estimated_tokens: int
     total_estimated_cost_usd: float
     fallback_rate: float
+    approval_rate: float  # approved+edited / (approved+edited+rejected) — primary Phase 3 metric
     generation_source_breakdown: dict[str, int]
     model_breakdown: dict[str, int]
     fallback_reason_breakdown: dict[str, int]

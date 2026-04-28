@@ -21,6 +21,7 @@ interface TwinStats {
   total_estimated_tokens: number;
   total_estimated_cost_usd: number;
   fallback_rate: number;
+  approval_rate: number;
   generation_source_breakdown: Record<string, number>;
   model_breakdown: Record<string, number>;
   fallback_reason_breakdown: Record<string, number>;
@@ -267,6 +268,15 @@ export default function DashboardPage() {
                       <p className="text-sm text-gray-600">Fallback Rate</p>
                       <p className="mt-2 text-3xl font-bold text-gray-900">
                         {(stats.fallback_rate * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                    <div className="col-span-2 rounded-lg bg-green-50 p-4">
+                      <p className="text-sm text-green-700 font-medium">Approval Rate</p>
+                      <p className="mt-2 text-3xl font-bold text-green-800">
+                        {(stats.approval_rate * 100).toFixed(0)}%
+                      </p>
+                      <p className="mt-1 text-xs text-green-600">
+                        Approved + edited vs total decided
                       </p>
                     </div>
                   </div>
