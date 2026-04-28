@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.schemas import SignupRequest, LoginRequest, TokenResponse, AuthResponse, UserResponse
+from app.schemas import SignupRequest, LoginRequest, TokenResponse, AuthResponse, UserResponse, PushTokenRequest, PushTokenResponse
 from app.services import AuthService
 from app.models import User
 
@@ -133,4 +133,19 @@ async def get_current_user_info(
     Returns: User data
     """
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/push-token", response_model=PushTokenResponse)
+async def register_push_token(
+    request: PushTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Register or update an Expo push token for the authenticated user.
+    Called by the mobile app after obtaining an Expo push token.
+    """
+    current_user.push_token = request.token
+    db.commit()
+    return {"registered": True}
 

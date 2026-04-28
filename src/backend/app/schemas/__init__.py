@@ -8,6 +8,8 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
     AuthResponse,
+    PushTokenRequest,
+    PushTokenResponse,
 )
 
 from app.schemas.twin import (
@@ -36,6 +38,8 @@ __all__ = [
     "TokenResponse",
     "UserResponse",
     "AuthResponse",
+    "PushTokenRequest",
+    "PushTokenResponse",
     # Twin
     "TwinResponse",
     "TwinStatsResponse",

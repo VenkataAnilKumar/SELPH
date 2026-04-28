@@ -19,6 +19,10 @@ jest.mock('@/lib/auth-context', () => ({
   MobileAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+jest.mock('@/lib/use-push-notifications', () => ({
+  usePushNotifications: jest.fn(),
+}))
+
 describe('Root layout navigation (mobile)', () => {
   beforeEach(() => {
     jest.clearAllMocks()

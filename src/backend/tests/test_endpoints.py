@@ -446,6 +446,54 @@ class TestDraftEndpoints:
         assert response.status_code == 403
 
 
+class TestPushTokenEndpoints:
+    """Tests for device push-token registration"""
+
+    def test_register_push_token_stores_token(self, client, test_db, auth_headers, test_user_data):
+        """POST /v1/auth/push-token stores the token on the user record."""
+        from app.models.user import User
+
+        response = client.post(
+            "/v1/auth/push-token",
+            json={"token": "ExponentPushToken[abc123]"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["registered"] is True
+
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        assert user is not None
+        assert user.push_token == "ExponentPushToken[abc123]"
+
+    def test_register_push_token_updates_existing_token(self, client, test_db, auth_headers, test_user_data):
+        """Re-registering with a new token overwrites the old value."""
+        from app.models.user import User
+
+        client.post(
+            "/v1/auth/push-token",
+            json={"token": "ExponentPushToken[old]"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/v1/auth/push-token",
+            json={"token": "ExponentPushToken[new]"},
+            headers=auth_headers,
+        )
+
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        assert user.push_token == "ExponentPushToken[new]"
+
+    def test_register_push_token_requires_auth(self, client):
+        """Unauthenticated requests are rejected with 403."""
+        response = client.post(
+            "/v1/auth/push-token",
+            json={"token": "ExponentPushToken[abc123]"},
+        )
+        assert response.status_code == 403
+
+
 class TestHealthEndpoint:
     """Test health check endpoint"""
 
