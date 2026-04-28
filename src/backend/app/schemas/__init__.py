@@ -37,6 +37,7 @@ from app.schemas.identity import (
     IdentityProfileResponse,
     UpdateIdentityRequest,
     IdentityConfidenceResponse,
+    IdentityOnboardingStatusResponse,
 )
 
 from app.schemas.channels import (
@@ -78,6 +79,7 @@ __all__ = [
     "IdentityProfileResponse",
     "UpdateIdentityRequest",
     "IdentityConfidenceResponse",
+    "IdentityOnboardingStatusResponse",
     # Channels
     "ChannelConnectRequest",
     "ChannelConnectResponse",

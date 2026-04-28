@@ -13,6 +13,7 @@ GET  /v1/identity/confidence
 """
 
 import pytest
+from app.models import ChannelCredential, User
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,52 @@ class TestConfidence:
     def test_confidence_requires_auth(self, client):
         """Unauthenticated request returns 403 (middleware behaviour)."""
         response = client.get("/v1/identity/confidence")
+        assert response.status_code == 403
+
+
+class TestOnboardingStatus:
+    def test_onboarding_status_before_onboarding(self, client, auth_headers):
+        response = client.get("/v1/identity/onboarding/status", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["onboarding_complete"] is False
+        assert data["profile_complete"] is False
+        assert data["completion_percent"] == 33
+        assert "complete_onboarding" in data["blockers"]
+        assert "connect_first_channel" in data["blockers"]
+
+    def test_onboarding_status_after_onboarding_and_channel_connect(
+        self,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        client.post("/v1/identity/onboard", json=ONBOARDING_PAYLOAD, headers=auth_headers)
+
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        credential = ChannelCredential(
+            user_id=user.id,
+            channel="instagram",
+            credential_type="oauth_token",
+            credential_value="token-123",
+            is_active=True,
+        )
+        test_db.add(credential)
+        test_db.commit()
+
+        response = client.get("/v1/identity/onboarding/status", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["onboarding_complete"] is True
+        assert data["profile_complete"] is True
+        assert data["completion_percent"] == 100
+        assert "instagram" in data["connected_channels"]
+        assert "gmail" in data["missing_channels"]
+        assert data["blockers"] == []
+
+    def test_onboarding_status_requires_auth(self, client):
+        response = client.get("/v1/identity/onboarding/status")
         assert response.status_code == 403
 
 
