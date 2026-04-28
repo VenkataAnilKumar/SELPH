@@ -21,7 +21,6 @@ module.exports = {
         jsx: 'react-jsx',
         sourceMap: true,
       },
-      useESM: true,
     }],
   },
 
