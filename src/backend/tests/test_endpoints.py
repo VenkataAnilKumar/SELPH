@@ -888,6 +888,79 @@ class TestChannelEndpoints:
         assert response.status_code == 403
 
 
+class TestReferralEndpoints:
+    """Tests for creator referral flow endpoints."""
+
+    @staticmethod
+    def _login_headers(client, email: str, password: str):
+        response = client.post(
+            "/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        token = response.json()["tokens"]["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_invite_and_summary(self, client, auth_headers):
+        invite_response = client.post(
+            "/v1/referrals/invite",
+            headers=auth_headers,
+            json={"invitee_email": "creator2@example.com"},
+        )
+        assert invite_response.status_code == 201
+        invite_data = invite_response.json()
+        assert invite_data["status"] == "pending"
+        assert invite_data["referral_code"]
+
+        summary_response = client.get("/v1/referrals/summary", headers=auth_headers)
+        assert summary_response.status_code == 200
+        summary = summary_response.json()
+        assert summary["total_invites"] == 1
+        assert summary["pending_invites"] == 1
+        assert summary["accepted_invites"] == 0
+        assert summary["reward_months_earned"] == 0
+
+    def test_accept_referral_updates_reward_months(self, client, auth_headers):
+        invite_response = client.post(
+            "/v1/referrals/invite",
+            headers=auth_headers,
+            json={"invitee_email": "creator3@example.com"},
+        )
+        code = invite_response.json()["referral_code"]
+
+        second_user = {
+            "email": "creator3@example.com",
+            "password": "TestPassword123",
+            "name": "Creator Three",
+        }
+        signup = client.post("/v1/auth/signup", json=second_user)
+        assert signup.status_code == 201
+        second_headers = self._login_headers(client, second_user["email"], second_user["password"])
+
+        accept_response = client.post(
+            "/v1/referrals/accept",
+            headers=second_headers,
+            json={"referral_code": code},
+        )
+        assert accept_response.status_code == 200
+        assert accept_response.json()["status"] == "accepted"
+
+        referrer_summary = client.get("/v1/referrals/summary", headers=auth_headers).json()
+        assert referrer_summary["accepted_invites"] == 1
+        assert referrer_summary["reward_months_earned"] == 1
+
+    def test_cannot_invite_self_email(self, client, auth_headers, test_user_data):
+        response = client.post(
+            "/v1/referrals/invite",
+            headers=auth_headers,
+            json={"invitee_email": test_user_data["email"]},
+        )
+        assert response.status_code == 400
+
+    def test_referral_summary_requires_auth(self, client):
+        response = client.get("/v1/referrals/summary")
+        assert response.status_code == 403
+
+
 class TestHealthEndpoint:
     """Test health check endpoint"""
 

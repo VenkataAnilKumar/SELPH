@@ -12,6 +12,7 @@ from app.models.audit_log import AuditLog
 from app.models.topic import Topic
 from app.models.consent import Consent
 from app.models.channel_credential import ChannelCredential
+from app.models.referral_invite import ReferralInvite
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "Topic",
     "Consent",
     "ChannelCredential",
+    "ReferralInvite",
 ]
