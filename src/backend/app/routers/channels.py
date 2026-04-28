@@ -13,6 +13,7 @@ Provides:
 
 import json
 import logging
+from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status, Depends, Query
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ from app.models import User, ChannelCredential
 from app.channels.instagram import InstagramAdapter
 from app.channels.gmail import GmailAdapter
 from app.config import get_settings
+from app.security import create_access_token, verify_token
 from app.services.channel import ChannelService
 from app.schemas.channels import (
     ChannelConnectRequest,
@@ -51,6 +53,39 @@ def _validate_channel(channel: str) -> str:
     return normalized
 
 
+def _build_oauth_state(user_id: str) -> str:
+    """Create a short-lived signed OAuth state token bound to a user."""
+    token, _ = create_access_token(
+        data={"sub": user_id, "purpose": "channel_oauth_state"},
+        expires_delta=timedelta(minutes=10),
+    )
+    return token
+
+
+def _resolve_oauth_state(state: str) -> str:
+    """Resolve and validate OAuth state, returning user_id if valid."""
+    payload = verify_token(state)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state",
+        )
+
+    if payload.get("purpose") != "channel_oauth_state":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state purpose",
+        )
+
+    user_id = payload.get("sub", "")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state user",
+        )
+    return user_id
+
+
 # ============================================================================
 # INSTAGRAM — OAuth
 # ============================================================================
@@ -70,7 +105,8 @@ async def instagram_oauth_url(
             detail="Instagram integration is not configured on this server",
         )
     adapter = InstagramAdapter()
-    url = adapter.build_authorization_url(user_id=current_user.id)
+    state_token = _build_oauth_state(current_user.id)
+    url = adapter.build_authorization_url(user_id=state_token)
     return OAuthUrlResponse(channel="instagram", authorization_url=url)
 
 
@@ -85,12 +121,7 @@ async def instagram_oauth_callback(
     Meta redirects here with ?code=...&state=<user_id> after the user grants access.
     Exchanges the code for tokens and stores credentials.
     """
-    user_id = state
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: missing user identifier",
-        )
+    user_id = _resolve_oauth_state(state)
 
     adapter = InstagramAdapter()
     try:
@@ -246,7 +277,8 @@ async def gmail_oauth_url(
             detail="Gmail integration is not configured on this server",
         )
     adapter = GmailAdapter()
-    url = adapter.build_authorization_url(user_id=current_user.id)
+    state_token = _build_oauth_state(current_user.id)
+    url = adapter.build_authorization_url(user_id=state_token)
     return OAuthUrlResponse(channel="gmail", authorization_url=url)
 
 
@@ -261,12 +293,7 @@ async def gmail_oauth_callback(
     Google redirects here with ?code=...&state=<user_id> after consent.
     Exchanges the code for tokens, sets up Pub/Sub watch, and stores credentials.
     """
-    user_id = state
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: missing user identifier",
-        )
+    user_id = _resolve_oauth_state(state)
 
     adapter = GmailAdapter()
     try:

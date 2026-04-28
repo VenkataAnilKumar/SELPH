@@ -17,7 +17,7 @@ import base64
 import json
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -35,11 +35,20 @@ from app.channels.gmail import GmailAdapter
 from app.channels.registry import get_adapter, list_channels
 from app.services.channel import ChannelService, _normalize_channel
 from app.middleware.auth import get_current_user
+from app.security import create_access_token
 
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
+
+def _make_oauth_state(user_id: str) -> str:
+    token, _ = create_access_token(
+        {"sub": user_id, "purpose": "channel_oauth_state"},
+        expires_delta=timedelta(minutes=10),
+    )
+    return token
 
 @pytest.fixture(scope="function")
 def test_db():
@@ -737,7 +746,7 @@ class TestInstagramOAuthEndpoints:
         with patch.object(InstagramAdapter, "exchange_code_for_token", return_value=adapter_result):
             resp = auth_client.get(
                 "/v1/channels/instagram/callback",
-                params={"code": "AUTH_CODE", "state": "user-p5-001"},
+                params={"code": "AUTH_CODE", "state": _make_oauth_state("user-p5-001")},
             )
         assert resp.status_code == 422
 
@@ -750,7 +759,7 @@ class TestInstagramOAuthEndpoints:
         with patch.object(InstagramAdapter, "exchange_code_for_token", return_value=adapter_result):
             resp = auth_client.get(
                 "/v1/channels/instagram/callback",
-                params={"code": "AUTH_CODE", "state": db_user.id},
+                params={"code": "AUTH_CODE", "state": _make_oauth_state(db_user.id)},
             )
         assert resp.status_code == 200
         data = resp.json()
@@ -765,9 +774,16 @@ class TestInstagramOAuthEndpoints:
         with patch.object(InstagramAdapter, "exchange_code_for_token", side_effect=Exception("API down")):
             resp = auth_client.get(
                 "/v1/channels/instagram/callback",
-                params={"code": "BAD_CODE", "state": db_user.id},
+                params={"code": "BAD_CODE", "state": _make_oauth_state(db_user.id)},
             )
         assert resp.status_code == 502
+
+    def test_callback_invalid_state_returns_400(self, auth_client):
+        resp = auth_client.get(
+            "/v1/channels/instagram/callback",
+            params={"code": "AUTH_CODE", "state": "raw-user-id-not-signed"},
+        )
+        assert resp.status_code == 400
 
 
 class TestGmailOAuthEndpoints:
@@ -803,7 +819,7 @@ class TestGmailOAuthEndpoints:
             mock_settings.return_value.google_pubsub_topic = "projects/test/topics/gmail"
             resp = auth_client.get(
                 "/v1/channels/gmail/callback",
-                params={"code": "AUTH_CODE", "state": db_user.id},
+                params={"code": "AUTH_CODE", "state": _make_oauth_state(db_user.id)},
             )
 
         assert resp.status_code == 200
@@ -821,9 +837,16 @@ class TestGmailOAuthEndpoints:
         with patch.object(GmailAdapter, "exchange_code_for_token", side_effect=Exception("OAuth failed")):
             resp = auth_client.get(
                 "/v1/channels/gmail/callback",
-                params={"code": "BAD_CODE", "state": db_user.id},
+                params={"code": "BAD_CODE", "state": _make_oauth_state(db_user.id)},
             )
         assert resp.status_code == 502
+
+    def test_callback_invalid_state_returns_400(self, auth_client):
+        resp = auth_client.get(
+            "/v1/channels/gmail/callback",
+            params={"code": "AUTH_CODE", "state": "raw-user-id-not-signed"},
+        )
+        assert resp.status_code == 400
 
 
 class TestGmailWebhookEndpoint:
