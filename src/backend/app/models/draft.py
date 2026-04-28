@@ -41,6 +41,13 @@ class Draft(BaseModel):
     estimated_output_tokens = Column(Integer, nullable=True)
     estimated_total_tokens = Column(Integer, nullable=True)
     estimated_cost_usd = Column(Float, nullable=True)
+
+    # Voice synthesis (Phase 6)
+    voice_status = Column(String, default="not_requested", nullable=False)
+    voice_audio_url = Column(Text, nullable=True)
+    voice_provider = Column(String, nullable=True)
+    voice_model_id = Column(String, nullable=True)
+    voice_error = Column(Text, nullable=True)
     
     # Status
     status = Column(String, default="pending_approval", nullable=False)  # pending_approval, approved, edited, rejected, sent
