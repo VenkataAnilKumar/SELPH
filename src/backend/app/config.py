@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     
     # Feature Flags
     feature_twin_briefing: bool = False
+    feature_twin_llm_drafts: bool = False
+    feature_twin_llm_json_retry: bool = True
     feature_vip_override: bool = False
     feature_batch_approval: bool = False
     feature_voice_clone: bool = False
@@ -83,6 +85,11 @@ class Settings(BaseSettings):
     feature_gmail: bool = False
     feature_twitter: bool = False
     feature_whatsapp: bool = False
+
+    # Twin LLM Runtime
+    twin_llm_max_tokens: int = 600
+    twin_llm_temperature: float = 0.7
+    twin_llm_timeout_seconds: int = 30
     
     # Moderation
     moderation_threshold: float = 0.7
