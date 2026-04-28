@@ -29,6 +29,12 @@ except Exception:  # pragma: no cover
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Estimated USD per 1M tokens (approx placeholders; tune per provider billing).
+MODEL_COST_PER_MILLION = {
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "gpt-5": {"input": 5.0, "output": 15.0},
+}
+
 
 @dataclass
 class ChannelConstraints:
@@ -79,6 +85,20 @@ class TwinContext:
 
 class TwinEngineService:
     """Twin Engine orchestration for draft generation."""
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        # Heuristic: ~4 chars/token, minimum 1 token for non-empty text.
+        if not text:
+            return 0
+        return max(1, int(len(text) / 4))
+
+    @staticmethod
+    def _estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+        rates = MODEL_COST_PER_MILLION.get(model, {"input": 3.0, "output": 15.0})
+        input_cost = (input_tokens / 1_000_000) * rates["input"]
+        output_cost = (output_tokens / 1_000_000) * rates["output"]
+        return round(input_cost + output_cost, 8)
 
     @staticmethod
     def _extract_json_object(text: str) -> dict:
@@ -377,12 +397,30 @@ class TwinEngineService:
         )
 
         pipeline_latency_ms = int((time.perf_counter() - pipeline_start) * 1000)
+        llm_model = settings.default_llm_model if generation_source == "llm" else "deterministic-fallback"
+        fallback_reason = generation_metrics.get("fallback_reason") if generation_source != "llm" else None
+
+        estimated_input_tokens = TwinEngineService._estimate_tokens(system_prompt) + TwinEngineService._estimate_tokens(user_prompt)
+        estimated_output_tokens = TwinEngineService._estimate_tokens(draft)
+        estimated_total_tokens = estimated_input_tokens + estimated_output_tokens
+        estimated_cost_usd = TwinEngineService._estimate_cost_usd(
+            settings.default_llm_model,
+            estimated_input_tokens,
+            estimated_output_tokens,
+        ) if generation_source == "llm" else 0.0
+
         metrics = {
             "pipeline_latency_ms": pipeline_latency_ms,
             "llm_latency_ms": generation_metrics.get("llm_latency_ms", 0),
             "parse_retry_count": generation_metrics.get("parse_retry_count", 0),
             "llm_calls": generation_metrics.get("llm_calls", 0),
             "used_fallback": generation_source != "llm",
+            "llm_model": llm_model,
+            "fallback_reason": fallback_reason,
+            "estimated_input_tokens": estimated_input_tokens,
+            "estimated_output_tokens": estimated_output_tokens,
+            "estimated_total_tokens": estimated_total_tokens,
+            "estimated_cost_usd": estimated_cost_usd,
         }
 
         logger.info(
@@ -409,5 +447,11 @@ class TwinEngineService:
             "system_prompt": system_prompt,
             "user_prompt": user_prompt,
             "generation_source": generation_source,
+            "llm_model": llm_model,
+            "fallback_reason": fallback_reason,
+            "estimated_input_tokens": estimated_input_tokens,
+            "estimated_output_tokens": estimated_output_tokens,
+            "estimated_total_tokens": estimated_total_tokens,
+            "estimated_cost_usd": estimated_cost_usd,
             "metrics": metrics,
         }

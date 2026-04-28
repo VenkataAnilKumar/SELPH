@@ -63,6 +63,17 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
                 confidence_reasoning=pipeline["confidence_reasoning"],
                 moderation_passed=pipeline["moderation_passed"],
                 moderation_flags=[{"pattern": f.get("pattern"), "risk": f.get("risk")} for f in pipeline["moderation_flags"]],
+                generation_source=pipeline.get("generation_source"),
+                llm_model=pipeline.get("llm_model"),
+                fallback_reason=pipeline.get("fallback_reason"),
+                llm_calls=pipeline.get("metrics", {}).get("llm_calls"),
+                parse_retry_count=pipeline.get("metrics", {}).get("parse_retry_count"),
+                llm_latency_ms=pipeline.get("metrics", {}).get("llm_latency_ms"),
+                pipeline_latency_ms=pipeline.get("metrics", {}).get("pipeline_latency_ms"),
+                estimated_input_tokens=pipeline.get("estimated_input_tokens"),
+                estimated_output_tokens=pipeline.get("estimated_output_tokens"),
+                estimated_total_tokens=pipeline.get("estimated_total_tokens"),
+                estimated_cost_usd=pipeline.get("estimated_cost_usd"),
             )
             
             # Mark message as draft_ready

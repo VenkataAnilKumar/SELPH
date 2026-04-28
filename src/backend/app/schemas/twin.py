@@ -31,6 +31,9 @@ class TwinStatsResponse(BaseModel):
     total_messages: int
     pending_drafts: int
     processed_drafts: int
+    total_estimated_tokens: int
+    total_estimated_cost_usd: float
+    fallback_rate: float
 
 
 class UpdateTwinRequest(BaseModel):
@@ -67,6 +70,17 @@ class DraftResponse(BaseModel):
     confidence_label: str
     moderation_passed: bool
     status: str
+    generation_source: Optional[str]
+    llm_model: Optional[str]
+    fallback_reason: Optional[str]
+    llm_calls: Optional[int]
+    parse_retry_count: Optional[int]
+    llm_latency_ms: Optional[int]
+    pipeline_latency_ms: Optional[int]
+    estimated_input_tokens: Optional[int]
+    estimated_output_tokens: Optional[int]
+    estimated_total_tokens: Optional[int]
+    estimated_cost_usd: Optional[float]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
