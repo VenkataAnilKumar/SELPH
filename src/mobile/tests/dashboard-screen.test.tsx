@@ -1,5 +1,5 @@
 import React from 'react'
-import { Alert } from 'react-native'
+import { Alert, AppState } from 'react-native'
 import { fireEvent, render, waitFor } from '@testing-library/react-native'
 import DashboardScreen from '../app/(dashboard)/index'
 import { useMobileAuth } from '@/lib/auth-context'
@@ -210,5 +210,38 @@ describe('Dashboard screen (mobile)', () => {
     await waitFor(() => {
       expect(getByText('Draft approved successfully.')).toBeTruthy()
     })
+  })
+
+  it('refreshes dashboard when app returns to foreground', async () => {
+    let appStateHandler: ((state: string) => void) | undefined
+    const removeMock = jest.fn()
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(
+      (_event: string, handler: (state: string) => void) => {
+        appStateHandler = handler
+        return { remove: removeMock } as any
+      }
+    )
+
+    primeDashboardFetches()
+    // prime data returned by the foreground refresh
+    ;(apiClient.get as jest.Mock)
+      .mockResolvedValueOnce(statsResponse)
+      .mockResolvedValueOnce({ data: [] })
+
+    const { getByText } = render(<DashboardScreen />)
+
+    await waitFor(() => {
+      expect(getByText('Twin Profile')).toBeTruthy()
+    })
+
+    // simulate app coming to foreground
+    appStateHandler?.('active')
+
+    await waitFor(() => {
+      // initial: 3 calls; foreground refresh: 2 calls = 5 total
+      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(5)
+    })
+
+    jest.restoreAllMocks()
   })
 })
