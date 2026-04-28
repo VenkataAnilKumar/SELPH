@@ -49,6 +49,9 @@ class TestDraftGenerationTaskPipeline:
             assert stored_draft.message_id == message.id
             assert stored_draft.user_id == test_user.id
             assert stored_draft.content
+            assert stored_draft.generation_source in ["deterministic", "llm"]
+            assert stored_draft.estimated_total_tokens is not None
+            assert stored_draft.estimated_cost_usd is not None
         finally:
             db.close()
 

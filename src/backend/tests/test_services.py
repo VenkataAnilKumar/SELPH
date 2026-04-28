@@ -202,6 +202,9 @@ class TestTwinService:
         assert "tone" in stats
         assert "total_messages" in stats
         assert "pending_drafts" in stats
+        assert "total_estimated_tokens" in stats
+        assert "total_estimated_cost_usd" in stats
+        assert "fallback_rate" in stats
         assert stats["status"] == "active"
         assert stats["total_messages"] == 0
         assert stats["pending_drafts"] == 0
@@ -489,6 +492,8 @@ class TestTwinEngineService:
         assert 0.0 <= result["confidence_score"] <= 1.0
         assert result["confidence_label"] in ["High", "Medium", "Low"]
         assert "topic_known" in result["confidence_factors"]
+        assert result["estimated_total_tokens"] >= 0
+        assert result["estimated_cost_usd"] >= 0
 
     def test_pipeline_uses_avoided_topic_fallback(self, test_db, test_user):
         """Avoided topics should trigger safe fallback response."""

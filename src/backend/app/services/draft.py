@@ -47,6 +47,17 @@ class DraftService:
         confidence_reasoning: str = None,
         moderation_passed: bool = False,
         moderation_flags: list = None,
+        generation_source: str = None,
+        llm_model: str = None,
+        fallback_reason: str = None,
+        llm_calls: int = None,
+        parse_retry_count: int = None,
+        llm_latency_ms: int = None,
+        pipeline_latency_ms: int = None,
+        estimated_input_tokens: int = None,
+        estimated_output_tokens: int = None,
+        estimated_total_tokens: int = None,
+        estimated_cost_usd: float = None,
     ) -> Draft:
         """
         Create a new draft response
@@ -72,6 +83,17 @@ class DraftService:
             confidence_reasoning=confidence_reasoning,
             moderation_passed=moderation_passed,
             moderation_flags=moderation_flags or [],
+            generation_source=generation_source,
+            llm_model=llm_model,
+            fallback_reason=fallback_reason,
+            llm_calls=llm_calls,
+            parse_retry_count=parse_retry_count,
+            llm_latency_ms=llm_latency_ms,
+            pipeline_latency_ms=pipeline_latency_ms,
+            estimated_input_tokens=estimated_input_tokens,
+            estimated_output_tokens=estimated_output_tokens,
+            estimated_total_tokens=estimated_total_tokens,
+            estimated_cost_usd=estimated_cost_usd,
             status="pending_approval",
         )
         

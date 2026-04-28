@@ -2,7 +2,7 @@
 Draft model — drafted responses awaiting approval
 """
 
-from sqlalchemy import Column, String, Text, ForeignKey, Float, Boolean, JSON, Index
+from sqlalchemy import Column, String, Text, ForeignKey, Float, Boolean, JSON, Index, Integer
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 
@@ -28,6 +28,19 @@ class Draft(BaseModel):
     # Safety
     moderation_passed = Column(Boolean, default=False, nullable=False)
     moderation_flags = Column(JSON, default=list, nullable=False)  # List of flags if any
+
+    # Generation controls & cost telemetry
+    generation_source = Column(String, nullable=True)  # llm | deterministic
+    llm_model = Column(String, nullable=True)
+    fallback_reason = Column(String, nullable=True)
+    llm_calls = Column(Integer, nullable=True)
+    parse_retry_count = Column(Integer, nullable=True)
+    llm_latency_ms = Column(Integer, nullable=True)
+    pipeline_latency_ms = Column(Integer, nullable=True)
+    estimated_input_tokens = Column(Integer, nullable=True)
+    estimated_output_tokens = Column(Integer, nullable=True)
+    estimated_total_tokens = Column(Integer, nullable=True)
+    estimated_cost_usd = Column(Float, nullable=True)
     
     # Status
     status = Column(String, default="pending_approval", nullable=False)  # pending_approval, approved, edited, rejected, sent

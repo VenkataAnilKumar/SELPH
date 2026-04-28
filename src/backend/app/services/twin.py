@@ -3,6 +3,7 @@ Twin management service
 """
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models import Twin, User
 
 
@@ -57,6 +58,22 @@ class TwinService:
             Draft.user_id == user_id,
             Draft.status == "pending_approval"
         ).count()
+
+        total_drafts = db.query(Draft).filter(Draft.user_id == user_id).count()
+        fallback_count = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.generation_source == "deterministic",
+        ).count()
+
+        total_tokens = db.query(func.coalesce(func.sum(Draft.estimated_total_tokens), 0)).filter(
+            Draft.user_id == user_id,
+        ).scalar() or 0
+
+        total_cost = db.query(func.coalesce(func.sum(Draft.estimated_cost_usd), 0.0)).filter(
+            Draft.user_id == user_id,
+        ).scalar() or 0.0
+
+        fallback_rate = round((fallback_count / total_drafts), 4) if total_drafts > 0 else 0.0
         
         return {
             "twin_id": twin.id,
@@ -66,6 +83,9 @@ class TwinService:
             "total_messages": total_messages,
             "pending_drafts": pending_drafts,
             "processed_drafts": processed_drafts,
+            "total_estimated_tokens": int(total_tokens),
+            "total_estimated_cost_usd": float(round(total_cost, 8)),
+            "fallback_rate": fallback_rate,
         }
     
     @staticmethod
