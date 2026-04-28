@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 16 with pgvector
+  postgres:
+    image: pgvector/pgvector:pg16-latest
+    container_name: selph-postgres
+    environment:
+      POSTGRES_USER: selph
+      POSTGRES_PASSWORD: selph_dev_password
+      POSTGRES_DB: selph
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selph -d selph"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - selph-network
+
+  # Redis for caching and Celery broker
+  redis:
+    image: redis:7-alpine
+    container_name: selph-redis
+    command: redis-server --appendonly yes --requirepass redis_dev_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - selph-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: selph-backend
+    environment:
+      DATABASE_URL: postgresql://selph:selph_dev_password@postgres:5432/selph
+      REDIS_URL: redis://:redis_dev_password@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis_dev_password@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:redis_dev_password@redis:6379/2
+      ENVIRONMENT: development
+      DEBUG: "true"
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src/backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - selph-network
+
+  # Celery Worker for draft generation and async tasks
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: selph-celery-worker
+    environment:
+      DATABASE_URL: postgresql://selph:selph_dev_password@postgres:5432/selph
+      REDIS_URL: redis://:redis_dev_password@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis_dev_password@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:redis_dev_password@redis:6379/2
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 --queues=celery,draft_generation,message_processing,voice_synthesis,avatar_generation
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - ./src/backend:/app
+    networks:
+      - selph-network
+
+  # Celery Flower for monitoring
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: selph-flower
+    environment:
+      CELERY_BROKER_URL: redis://:redis_dev_password@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:redis_dev_password@redis:6379/2
+    command: celery -A app.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - selph-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  selph-network:
+    driver: bridge

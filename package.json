@@ -1,0 +1,22 @@
+{
+  "name": "selph-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SELPH — Your Digital Twin AI",
+  "workspaces": [
+    "src/web",
+    "src/landing",
+    "src/mobile",
+    "src/shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "format": "npm run format --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

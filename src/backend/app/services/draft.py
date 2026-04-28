@@ -1,0 +1,236 @@
+"""
+Draft management service for approval workflow
+"""
+
+from sqlalchemy.orm import Session
+from app.models import Draft, Message, Twin, AuditLog
+
+
+class DraftService:
+    """Service for managing draft responses"""
+    
+    @staticmethod
+    def get_draft(db: Session, draft_id: str) -> Draft:
+        """Get a draft by ID"""
+        return db.query(Draft).filter(Draft.id == draft_id).first()
+    
+    @staticmethod
+    def get_pending_drafts(
+        db: Session,
+        user_id: str,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> list:
+        """Get pending drafts for a user"""
+        return db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        ).order_by(Draft.created_at.desc()).offset(skip).limit(limit).all()
+    
+    @staticmethod
+    def count_pending_drafts(db: Session, user_id: str) -> int:
+        """Count pending drafts for a user"""
+        return db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        ).count()
+    
+    @staticmethod
+    def create_draft(
+        db: Session,
+        message_id: str,
+        user_id: str,
+        twin_id: str,
+        content: str,
+        confidence_score: float = 0.5,
+        confidence_label: str = "Medium",
+        confidence_reasoning: str = None,
+        moderation_passed: bool = False,
+        moderation_flags: list = None,
+    ) -> Draft:
+        """
+        Create a new draft response
+        
+        Args:
+            message_id: ID of the message this draft responds to
+            user_id: User ID
+            twin_id: Twin ID
+            content: Generated response content
+            confidence_score: Confidence 0.0-1.0
+            confidence_label: High/Medium/Low
+            confidence_reasoning: Why this confidence level
+            moderation_passed: Whether content passed safety checks
+            moderation_flags: List of safety flags if any
+        """
+        draft = Draft(
+            message_id=message_id,
+            user_id=user_id,
+            twin_id=twin_id,
+            content=content,
+            confidence_score=confidence_score,
+            confidence_label=confidence_label,
+            confidence_reasoning=confidence_reasoning,
+            moderation_passed=moderation_passed,
+            moderation_flags=moderation_flags or [],
+            status="pending_approval",
+        )
+        
+        db.add(draft)
+        db.commit()
+        db.refresh(draft)
+        return draft
+    
+    @staticmethod
+    def approve_draft(db: Session, draft_id: str, user_id: str) -> Draft:
+        """Approve a draft (user action: approve)"""
+        draft = DraftService.get_draft(db, draft_id)
+        
+        if not draft:
+            return None
+        
+        if draft.user_id != user_id:
+            raise ValueError("Unauthorized: Draft belongs to different user")
+        
+        draft.status = "approved"
+        draft.user_action = "approve"
+        
+        # Log action
+        audit = AuditLog(
+            user_id=user_id,
+            action="approve_draft",
+            resource_type="Draft",
+            resource_id=draft_id,
+            details={"confidence_score": draft.confidence_score},
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(draft)
+        return draft
+    
+    @staticmethod
+    def reject_draft(db: Session, draft_id: str, user_id: str) -> Draft:
+        """Reject a draft (user action: reject)"""
+        draft = DraftService.get_draft(db, draft_id)
+        
+        if not draft:
+            return None
+        
+        if draft.user_id != user_id:
+            raise ValueError("Unauthorized: Draft belongs to different user")
+        
+        draft.status = "rejected"
+        draft.user_action = "reject"
+        
+        # Log action
+        audit = AuditLog(
+            user_id=user_id,
+            action="reject_draft",
+            resource_type="Draft",
+            resource_id=draft_id,
+            details={},
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(draft)
+        return draft
+    
+    @staticmethod
+    def edit_draft(
+        db: Session,
+        draft_id: str,
+        user_id: str,
+        edited_content: str,
+    ) -> Draft:
+        """Edit and approve a draft (user action: edit)"""
+        draft = DraftService.get_draft(db, draft_id)
+        
+        if not draft:
+            return None
+        
+        if draft.user_id != user_id:
+            raise ValueError("Unauthorized: Draft belongs to different user")
+        
+        draft.edited_content = edited_content
+        draft.status = "edited"
+        draft.user_action = "edit"
+        
+        # Log action
+        audit = AuditLog(
+            user_id=user_id,
+            action="edit_draft",
+            resource_type="Draft",
+            resource_id=draft_id,
+            details={},
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(draft)
+        return draft
+    
+    @staticmethod
+    def skip_draft(db: Session, draft_id: str, user_id: str) -> Draft:
+        """Skip a draft (user action: skip)"""
+        draft = DraftService.get_draft(db, draft_id)
+        
+        if not draft:
+            return None
+        
+        if draft.user_id != user_id:
+            raise ValueError("Unauthorized: Draft belongs to different user")
+        
+        draft.status = "rejected"  # Treat as rejected
+        draft.user_action = "skip"
+        
+        # Log action
+        audit = AuditLog(
+            user_id=user_id,
+            action="skip_draft",
+            resource_type="Draft",
+            resource_id=draft_id,
+            details={},
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(draft)
+        return draft
+    
+    @staticmethod
+    def mark_as_sent(db: Session, draft_id: str) -> Draft:
+        """Mark draft as sent (post-approval, when response is delivered)"""
+        draft = DraftService.get_draft(db, draft_id)
+        
+        if draft:
+            draft.status = "sent"
+            db.commit()
+            db.refresh(draft)
+        
+        return draft
+    
+    @staticmethod
+    def get_draft_summary(db: Session, user_id: str) -> dict:
+        """Get summary of drafts for a user"""
+        total = db.query(Draft).filter(Draft.user_id == user_id).count()
+        pending = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        ).count()
+        approved = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "approved",
+        ).count()
+        rejected = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status.in_(["rejected"]),
+        ).count()
+        sent = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "sent",
+        ).count()
+        
+        return {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "sent": sent,
+        }

@@ -1,0 +1,12 @@
+{
+  "name": "@selph/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "files": [
+    "api",
+    "types",
+    "constants"
+  ]
+}
