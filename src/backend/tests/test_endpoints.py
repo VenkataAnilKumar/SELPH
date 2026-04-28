@@ -989,6 +989,59 @@ class TestReferralEndpoints:
         response = client.get("/v1/referrals/summary")
         assert response.status_code == 403
 
+    def test_referral_code_cannot_be_claimed_by_second_user(self, client, auth_headers):
+        invite_response = client.post(
+            "/v1/referrals/invite",
+            headers=auth_headers,
+            json={"invitee_email": "creator4@example.com"},
+        )
+        code = invite_response.json()["referral_code"]
+
+        first_invitee = {
+            "email": "creator4@example.com",
+            "password": "TestPassword123",
+            "name": "Creator Four",
+        }
+        second_invitee = {
+            "email": "creator5@example.com",
+            "password": "TestPassword123",
+            "name": "Creator Five",
+        }
+        assert client.post("/v1/auth/signup", json=first_invitee).status_code == 201
+        assert client.post("/v1/auth/signup", json=second_invitee).status_code == 201
+
+        first_headers = self._login_headers(client, first_invitee["email"], first_invitee["password"])
+        second_headers = self._login_headers(client, second_invitee["email"], second_invitee["password"])
+
+        first_accept = client.post(
+            "/v1/referrals/accept",
+            headers=first_headers,
+            json={"referral_code": code},
+        )
+        assert first_accept.status_code == 200
+
+        second_accept = client.post(
+            "/v1/referrals/accept",
+            headers=second_headers,
+            json={"referral_code": code},
+        )
+        assert second_accept.status_code == 409
+
+    def test_referrer_cannot_accept_own_referral_code(self, client, auth_headers):
+        invite_response = client.post(
+            "/v1/referrals/invite",
+            headers=auth_headers,
+            json={"invitee_email": "creator6@example.com"},
+        )
+        code = invite_response.json()["referral_code"]
+
+        accept_response = client.post(
+            "/v1/referrals/accept",
+            headers=auth_headers,
+            json={"referral_code": code},
+        )
+        assert accept_response.status_code == 409
+
 
 class TestHealthEndpoint:
     """Test health check endpoint"""

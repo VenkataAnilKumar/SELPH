@@ -52,7 +52,18 @@ async def accept_referral_invite(
     db: Session = Depends(get_db),
 ):
     """Accept a referral invite using a referral code."""
-    invite = ReferralService.accept_invite(db, current_user.id, request.referral_code)
+    try:
+        invite = ReferralService.accept_invite(db, current_user.id, request.referral_code)
+    except ValueError as exc:
+        detail_map = {
+            "self_referral_not_allowed": "Cannot accept your own referral code",
+            "referral_code_already_claimed": "Referral code already claimed by another user",
+        }
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail_map.get(str(exc), "Referral acceptance conflict"),
+        ) from exc
+
     if not invite:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
