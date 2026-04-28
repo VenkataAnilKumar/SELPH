@@ -7,7 +7,7 @@ module.exports = {
 
   // Module path mapping for TypeScript imports
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@/(.*)$': '<rootDir>/$1',
     '^@selph/shared$': '<rootDir>/../shared/index.ts',
   },
 
