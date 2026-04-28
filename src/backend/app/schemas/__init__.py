@@ -17,8 +17,16 @@ from app.schemas.twin import (
     MessageResponse,
     DraftResponse,
     DraftApprovalRequest,
+)
+
+from app.schemas.identity import (
+    OnboardingRequest,
+    OnboardingResponse,
+    TopicRequest,
+    TopicResponse,
     IdentityProfileResponse,
     UpdateIdentityRequest,
+    IdentityConfidenceResponse,
 )
 
 __all__ = [
@@ -28,14 +36,20 @@ __all__ = [
     "TokenResponse",
     "UserResponse",
     "AuthResponse",
-    # Twin & Identity
+    # Twin
     "TwinResponse",
     "TwinStatsResponse",
     "UpdateTwinRequest",
-    "IdentityProfileResponse",
-    "UpdateIdentityRequest",
     # Messages & Drafts
     "MessageResponse",
     "DraftResponse",
     "DraftApprovalRequest",
+    # Identity
+    "OnboardingRequest",
+    "OnboardingResponse",
+    "TopicRequest",
+    "TopicResponse",
+    "IdentityProfileResponse",
+    "UpdateIdentityRequest",
+    "IdentityConfidenceResponse",
 ]

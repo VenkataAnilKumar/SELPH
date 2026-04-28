@@ -78,17 +78,4 @@ class DraftApprovalRequest(BaseModel):
     edited_content: Optional[str] = None  # Required if action == "edit"
 
 
-class IdentityProfileResponse(BaseModel):
-    """Identity profile response"""
-    vocabulary_description: Optional[str]
-    communication_style: Optional[str]
-    topics_known: list
-    topics_avoided: list
 
-
-class UpdateIdentityRequest(BaseModel):
-    """Request to update identity profile"""
-    vocabulary_description: Optional[str] = None
-    communication_style: Optional[str] = None
-    topics_known: Optional[list] = None
-    topics_avoided: Optional[list] = None
