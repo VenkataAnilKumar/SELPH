@@ -133,6 +133,35 @@ class TestAuthEndpoints:
 class TestTwinEndpoints:
     """Test twin endpoints"""
 
+    @staticmethod
+    def _seed_quality_draft(test_db, user, *, status: str, latency: int = 400):
+        message = MessageService.create_message(
+            test_db,
+            user.id,
+            "instagram_dm",
+            f"sender-{status}-{latency}",
+            "Quality Sender",
+            "Quality check message",
+            {},
+        )
+        draft = DraftService.create_draft(
+            test_db,
+            message.id,
+            user.id,
+            user.twin.id,
+            "Quality draft",
+            confidence_score=0.82,
+            confidence_label="High",
+            moderation_passed=True,
+            moderation_flags=[],
+            generation_source="llm",
+            llm_model="claude-sonnet-4-6",
+            pipeline_latency_ms=latency,
+        )
+        draft.status = status
+        test_db.commit()
+        return draft
+
     def test_get_twin(self, client, auth_headers):
         """Test getting twin profile"""
         response = client.get("/v1/twin/me", headers=auth_headers)
@@ -197,6 +226,28 @@ class TestTwinEndpoints:
         """Test getting twin without auth"""
         response = client.get("/v1/twin/me")
         
+        assert response.status_code == 403
+
+    def test_get_twin_quality_summary(self, client, auth_headers, test_db, test_user_data):
+        """Quality summary should return 7-day dashboard metrics."""
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        self._seed_quality_draft(test_db, user, status="approved", latency=300)
+        self._seed_quality_draft(test_db, user, status="edited", latency=500)
+        self._seed_quality_draft(test_db, user, status="rejected", latency=700)
+
+        response = client.get("/v1/twin/quality-summary", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["twin_id"] == user.twin.id
+        assert data["drafts_handled_7d"] == 3
+        assert data["approval_rate_7d"] == pytest.approx(0.6667, abs=0.001)
+        assert data["avg_pipeline_latency_ms_7d"] == 500
+        assert data["quality_label"] in {"excellent", "good", "needs_attention"}
+        assert isinstance(data["recommendation"], str)
+
+    def test_get_twin_quality_summary_unauthorized(self, client):
+        response = client.get("/v1/twin/quality-summary")
         assert response.status_code == 403
 
 

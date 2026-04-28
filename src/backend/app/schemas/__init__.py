@@ -15,6 +15,7 @@ from app.schemas.auth import (
 from app.schemas.twin import (
     TwinResponse,
     TwinStatsResponse,
+    TwinQualitySummaryResponse,
     UpdateTwinRequest,
     MessageResponse,
     DraftResponse,
@@ -55,6 +56,7 @@ __all__ = [
     # Twin
     "TwinResponse",
     "TwinStatsResponse",
+    "TwinQualitySummaryResponse",
     "UpdateTwinRequest",
     # Messages & Drafts
     "MessageResponse",
