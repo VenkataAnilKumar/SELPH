@@ -114,3 +114,44 @@ class IdentityConfidenceResponse(BaseModel):
     fields_complete: int   # number of profile fields filled
     total_fields: int      # total profile fields scored
     message: str           # human-readable status
+
+
+class VoiceConsentRequest(BaseModel):
+    """Grant or revoke voice clone consent."""
+
+    granted: bool
+
+
+class VoiceConsentResponse(BaseModel):
+    """Voice consent state for the current user."""
+
+    consent_type: str
+    granted: bool
+    granted_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+class VoiceEnrollmentRequest(BaseModel):
+    """Voice profile enrollment payload."""
+
+    voice_provider: str = "mock"
+    voice_model_id: Optional[str] = None
+    voice_sample_url: Optional[str] = None
+
+    @field_validator("voice_provider")
+    @classmethod
+    def validate_voice_provider(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"mock", "elevenlabs"}:
+            raise ValueError("voice_provider must be 'mock' or 'elevenlabs'")
+        return normalized
+
+
+class VoiceEnrollmentResponse(BaseModel):
+    """Voice profile enrollment status."""
+
+    enrolled: bool
+    voice_provider: Optional[str] = None
+    voice_model_id: Optional[str] = None
+    voice_sample_url: Optional[str] = None
+    consent_granted: bool

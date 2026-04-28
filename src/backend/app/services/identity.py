@@ -2,9 +2,11 @@
 Identity profile management service
 """
 
+from datetime import datetime, UTC
+
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import IdentityProfile, Topic, Twin
+from app.models import IdentityProfile, Topic, Twin, Consent
 
 
 class IdentityService:
@@ -255,3 +257,75 @@ class IdentityService:
             "total_fields": TOTAL_FIELDS,
             "message": message,
         }
+
+    @staticmethod
+    def get_voice_consent(db: Session, user_id: str) -> Consent | None:
+        """Return voice clone consent row if present."""
+        return db.query(Consent).filter(
+            Consent.user_id == user_id,
+            Consent.consent_type == "voice_clone",
+        ).first()
+
+    @staticmethod
+    def set_voice_consent(db: Session, user_id: str, granted: bool) -> Consent:
+        """Create or update voice clone consent state."""
+        consent = IdentityService.get_voice_consent(db, user_id)
+        if not consent:
+            consent = Consent(user_id=user_id, consent_type="voice_clone")
+
+        consent.granted = granted
+        consent.granted_at = datetime.now(UTC).replace(tzinfo=None) if granted else None
+        if not granted:
+            consent.expires_at = None
+
+        db.add(consent)
+        db.commit()
+        db.refresh(consent)
+        return consent
+
+    @staticmethod
+    def is_voice_consent_granted(db: Session, user_id: str) -> bool:
+        """Check whether voice clone consent is currently granted."""
+        consent = IdentityService.get_voice_consent(db, user_id)
+        if not consent or not consent.granted:
+            return False
+        if consent.expires_at and consent.expires_at <= datetime.now(UTC).replace(tzinfo=None):
+            return False
+        return True
+
+    @staticmethod
+    def enroll_voice_profile(
+        db: Session,
+        user_id: str,
+        voice_provider: str,
+        voice_model_id: str | None,
+        voice_sample_url: str | None,
+    ) -> IdentityProfile:
+        """Persist voice profile metadata in identity profile."""
+        profile = IdentityService.get_identity_profile(db, user_id)
+        if not profile:
+            profile = IdentityProfile(user_id=user_id)
+
+        profile.voice_provider = voice_provider
+        profile.voice_model_id = voice_model_id
+        profile.voice_sample_url = voice_sample_url
+
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+        return profile
+
+    @staticmethod
+    def clear_voice_profile(db: Session, user_id: str) -> IdentityProfile:
+        """Remove enrolled voice metadata for the user."""
+        profile = IdentityService.get_identity_profile(db, user_id)
+        if not profile:
+            profile = IdentityProfile(user_id=user_id)
+
+        profile.voice_model_id = None
+        profile.voice_sample_url = None
+
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+        return profile

@@ -286,3 +286,107 @@ class TestConfidence:
         """Unauthenticated request returns 403 (middleware behaviour)."""
         response = client.get("/v1/identity/confidence")
         assert response.status_code == 403
+
+
+# ── Voice Clone (Phase 6 PR B) ─────────────────────────────────────────────
+
+class TestVoiceCloneEnrollment:
+    def test_voice_consent_defaults_to_false(self, client, auth_headers):
+        response = client.get("/v1/identity/voice/consent", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["consent_type"] == "voice_clone"
+        assert data["granted"] is False
+
+    def test_grant_and_revoke_voice_consent(self, client, auth_headers):
+        grant = client.post(
+            "/v1/identity/voice/consent",
+            json={"granted": True},
+            headers=auth_headers,
+        )
+        assert grant.status_code == 200
+        assert grant.json()["granted"] is True
+        assert grant.json()["granted_at"] is not None
+
+        revoke = client.post(
+            "/v1/identity/voice/consent",
+            json={"granted": False},
+            headers=auth_headers,
+        )
+        assert revoke.status_code == 200
+        assert revoke.json()["granted"] is False
+
+    def test_enroll_requires_consent(self, client, auth_headers):
+        response = client.post(
+            "/v1/identity/voice/enroll",
+            json={
+                "voice_provider": "mock",
+                "voice_model_id": "voice-001",
+                "voice_sample_url": "https://example.com/sample.wav",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 409
+
+    def test_enroll_after_consent_and_fetch_profile(self, client, auth_headers):
+        client.post(
+            "/v1/identity/voice/consent",
+            json={"granted": True},
+            headers=auth_headers,
+        )
+
+        enroll = client.post(
+            "/v1/identity/voice/enroll",
+            json={
+                "voice_provider": "mock",
+                "voice_model_id": "voice-001",
+                "voice_sample_url": "https://example.com/sample.wav",
+            },
+            headers=auth_headers,
+        )
+        assert enroll.status_code == 200
+        data = enroll.json()
+        assert data["enrolled"] is True
+        assert data["voice_provider"] == "mock"
+        assert data["voice_model_id"] == "voice-001"
+        assert data["consent_granted"] is True
+
+        profile = client.get("/v1/identity/voice/profile", headers=auth_headers)
+        assert profile.status_code == 200
+        profile_data = profile.json()
+        assert profile_data["enrolled"] is True
+        assert profile_data["voice_model_id"] == "voice-001"
+
+    def test_clear_voice_profile(self, client, auth_headers):
+        client.post("/v1/identity/voice/consent", json={"granted": True}, headers=auth_headers)
+        client.post(
+            "/v1/identity/voice/enroll",
+            json={"voice_provider": "mock", "voice_model_id": "voice-123"},
+            headers=auth_headers,
+        )
+
+        clear = client.delete("/v1/identity/voice/profile", headers=auth_headers)
+        assert clear.status_code == 200
+        assert clear.json()["enrolled"] is False
+        assert clear.json()["voice_model_id"] is None
+
+    def test_revoke_consent_clears_voice_profile(self, client, auth_headers):
+        client.post("/v1/identity/voice/consent", json={"granted": True}, headers=auth_headers)
+        client.post(
+            "/v1/identity/voice/enroll",
+            json={"voice_provider": "mock", "voice_model_id": "voice-xyz"},
+            headers=auth_headers,
+        )
+
+        client.post("/v1/identity/voice/consent", json={"granted": False}, headers=auth_headers)
+        profile = client.get("/v1/identity/voice/profile", headers=auth_headers)
+        assert profile.status_code == 200
+        assert profile.json()["enrolled"] is False
+        assert profile.json()["voice_model_id"] is None
+
+    def test_voice_endpoints_require_auth(self, client):
+        assert client.get("/v1/identity/voice/consent").status_code == 403
+        assert client.post("/v1/identity/voice/consent", json={"granted": True}).status_code == 403
+        assert client.post("/v1/identity/voice/enroll", json={"voice_provider": "mock"}).status_code == 403
+        assert client.get("/v1/identity/voice/profile").status_code == 403
+        assert client.delete("/v1/identity/voice/profile").status_code == 403
