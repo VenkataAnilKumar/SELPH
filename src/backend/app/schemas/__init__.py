@@ -19,6 +19,9 @@ from app.schemas.twin import (
     MessageResponse,
     DraftResponse,
     DraftApprovalRequest,
+    DraftVoiceGenerateRequest,
+    DraftVoiceGenerateResponse,
+    DraftVoiceStatusResponse,
 )
 
 from app.schemas.identity import (
@@ -54,6 +57,9 @@ __all__ = [
     "MessageResponse",
     "DraftResponse",
     "DraftApprovalRequest",
+    "DraftVoiceGenerateRequest",
+    "DraftVoiceGenerateResponse",
+    "DraftVoiceStatusResponse",
     # Identity
     "OnboardingRequest",
     "OnboardingResponse",

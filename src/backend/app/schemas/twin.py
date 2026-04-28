@@ -85,6 +85,11 @@ class DraftResponse(BaseModel):
     estimated_output_tokens: Optional[int]
     estimated_total_tokens: Optional[int]
     estimated_cost_usd: Optional[float]
+    voice_status: Optional[str]
+    voice_audio_url: Optional[str]
+    voice_provider: Optional[str]
+    voice_model_id: Optional[str]
+    voice_error: Optional[str]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +99,32 @@ class DraftApprovalRequest(BaseModel):
     """Request to approve, edit, or reject a draft"""
     action: str  # approve, reject, edit, skip
     edited_content: Optional[str] = None  # Required if action == "edit"
+
+
+class DraftVoiceGenerateRequest(BaseModel):
+    """Request payload to queue voice synthesis for a draft."""
+
+    voice_model_id: Optional[str] = None
+
+
+class DraftVoiceGenerateResponse(BaseModel):
+    """Queue response for draft voice synthesis."""
+
+    draft_id: str
+    queued: bool
+    voice_status: str
+    task_id: Optional[str] = None
+
+
+class DraftVoiceStatusResponse(BaseModel):
+    """Voice synthesis status for a draft."""
+
+    draft_id: str
+    voice_status: str
+    voice_audio_url: Optional[str] = None
+    voice_provider: Optional[str] = None
+    voice_model_id: Optional[str] = None
+    voice_error: Optional[str] = None
 
 
 

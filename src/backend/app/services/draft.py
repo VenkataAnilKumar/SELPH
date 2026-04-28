@@ -280,3 +280,28 @@ class DraftService:
             "rejected": rejected,
             "sent": sent,
         }
+
+    @staticmethod
+    def set_voice_status(
+        db: Session,
+        draft_id: str,
+        voice_status: str,
+        voice_audio_url: str = None,
+        voice_provider: str = None,
+        voice_model_id: str = None,
+        voice_error: str = None,
+    ) -> Draft:
+        """Update voice synthesis fields on a draft."""
+        draft = DraftService.get_draft(db, draft_id)
+        if not draft:
+            return None
+
+        draft.voice_status = voice_status
+        draft.voice_audio_url = voice_audio_url
+        draft.voice_provider = voice_provider
+        draft.voice_model_id = voice_model_id
+        draft.voice_error = voice_error
+
+        db.commit()
+        db.refresh(draft)
+        return draft
