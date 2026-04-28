@@ -32,6 +32,7 @@ interface TwinStats {
   total_estimated_tokens: number
   total_estimated_cost_usd: number
   fallback_rate: number
+  approval_rate: number
   generation_source_breakdown: Record<string, number>
   model_breakdown: Record<string, number>
   fallback_reason_breakdown: Record<string, number>
@@ -267,6 +268,12 @@ export default function DashboardScreen() {
               <Text style={styles.profileLabel}>Fallback Rate</Text>
               <Text style={styles.statValue}>
                 {(stats.fallback_rate * 100).toFixed(0)}%
+              </Text>
+            </View>
+            <View style={[styles.statCard, styles.approvalRateCard]}>
+              <Text style={[styles.profileLabel, styles.approvalRateLabel]}>Approval Rate</Text>
+              <Text style={[styles.statValue, styles.approvalRateValue]}>
+                {(stats.approval_rate * 100).toFixed(0)}%
               </Text>
             </View>
           </View>
@@ -576,6 +583,20 @@ const styles = StyleSheet.create({
   statCard: {
     width: '50%',
     padding: 4,
+  },
+  approvalRateCard: {
+    width: '100%',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 4,
+  },
+  approvalRateLabel: {
+    color: '#15803d',
+    fontWeight: '600',
+  },
+  approvalRateValue: {
+    color: '#14532d',
   },
   statValue: {
     marginTop: 8,

@@ -37,6 +37,7 @@ describe('Dashboard screen (mobile)', () => {
       total_estimated_tokens: 420,
       total_estimated_cost_usd: 0.0024,
       fallback_rate: 0.25,
+      approval_rate: 0.75,
       generation_source_breakdown: {
         llm: 3,
         deterministic: 1,

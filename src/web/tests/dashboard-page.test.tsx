@@ -41,6 +41,7 @@ describe('Dashboard page (web)', () => {
       total_estimated_tokens: 420,
       total_estimated_cost_usd: 0.0024,
       fallback_rate: 0.25,
+      approval_rate: 0.75,
       generation_source_breakdown: {
         llm: 3,
         deterministic: 1,
@@ -106,6 +107,8 @@ describe('Dashboard page (web)', () => {
     expect(screen.getByText('test@example.com')).toBeInTheDocument()
     expect(screen.getByText('Approval Loop')).toBeInTheDocument()
     expect(screen.getAllByText('Pending Drafts')).toHaveLength(2)
+    expect(screen.getByText('Approval Rate')).toBeInTheDocument()
+    expect(screen.getByText('75%')).toBeInTheDocument()
     expect(screen.getByText('Here is a thoughtful response for your audience.')).toBeInTheDocument()
     expect(screen.getByText('Model Signals')).toBeInTheDocument()
   })

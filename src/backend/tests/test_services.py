@@ -820,3 +820,190 @@ class TestPushNotificationTask:
         assert captured["payload"]["to"] == "ExponentPushToken[test]"
         assert captured["payload"]["title"] == "New draft ready"
         assert captured["payload"]["data"]["draft_id"] == "d-1"
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.4 — Twin Learning Service
+# ---------------------------------------------------------------------------
+
+class TestTwinLearningService:
+    """Unit tests for TwinLearningService (Phase 3.4)."""
+
+    def _make_twin_and_draft(self, db, user):
+        """Helper: create a message + draft for the given user's twin."""
+        from app.models import Message, Draft
+
+        msg = Message(
+            user_id=user.id,
+            channel="test",
+            sender_id="s1",
+            sender_name="Sender",
+            content="Hello there, can you help me?",
+            status="received",
+        )
+        db.add(msg)
+        db.flush()
+
+        draft = Draft(
+            message_id=msg.id,
+            user_id=user.id,
+            twin_id=user.twin.id,
+            content="Sure! Happy to help you with that amazing project.",
+            confidence_score=0.85,
+            confidence_label="High",
+            moderation_passed=True,
+            status="pending_approval",
+        )
+        db.add(draft)
+        db.commit()
+        db.refresh(draft)
+        return draft
+
+    def test_learn_from_approval_adds_vocab(self, test_db, test_user):
+        """Approving a draft should absorb new vocab words into the twin."""
+        from app.services.twin_learning import TwinLearningService
+
+        twin = test_user.twin
+        original_vocab = list(twin.vocab)
+
+        TwinLearningService.learn_from_approval(
+            test_db, twin.id, "This specialised vocabulary expansion works perfectly"
+        )
+        test_db.refresh(twin)
+
+        assert "specialised" in twin.vocab or "vocabulary" in twin.vocab or "expansion" in twin.vocab
+
+    def test_learn_from_approval_unknown_twin_is_noop(self, test_db):
+        """Calling with a non-existent twin ID should silently do nothing."""
+        from app.services.twin_learning import TwinLearningService
+
+        # Should not raise
+        TwinLearningService.learn_from_approval(test_db, "nonexistent-twin-id", "some text")
+
+    def test_learn_from_edit_adjusts_response_length(self, test_db, test_user):
+        """Editing toward a shorter response should nudge avg_response_length down."""
+        from app.services.twin_learning import TwinLearningService
+
+        twin = test_user.twin
+        twin.avg_response_length = 200
+        test_db.commit()
+
+        # Edited version is ~5 words
+        short_edit = "Sure! Let me know."
+        TwinLearningService.learn_from_edit(
+            test_db, twin.id, "original longer content here for testing purposes", short_edit
+        )
+        test_db.refresh(twin)
+
+        # Should have moved slightly lower than 200
+        assert twin.avg_response_length < 200
+
+    def test_learn_from_edit_absorbs_edited_vocab(self, test_db, test_user):
+        """Edited vocab should appear in the twin's vocab list."""
+        from app.services.twin_learning import TwinLearningService
+
+        twin = test_user.twin
+        TwinLearningService.learn_from_edit(
+            test_db, twin.id, "original text", "uniqueword edited content version"
+        )
+        test_db.refresh(twin)
+
+        assert "uniqueword" in twin.vocab or "edited" in twin.vocab or "content" in twin.vocab
+
+    def test_vocab_bounded_to_max(self, test_db, test_user):
+        """Vocab list should never exceed 200 entries."""
+        from app.services.twin_learning import TwinLearningService
+
+        twin = test_user.twin
+        # Pre-fill with 195 unique words
+        twin.vocab = [f"word{i}" for i in range(195)]
+        test_db.commit()
+
+        # Absorb 20 more unique words
+        big_text = " ".join(f"brand{i}word" for i in range(20))
+        TwinLearningService.learn_from_approval(test_db, twin.id, big_text)
+        test_db.refresh(twin)
+
+        assert len(twin.vocab) <= 200
+
+
+class TestApprovalRateMetric:
+    """Tests that approval_rate appears correctly in TwinStatsResponse (Phase 3 exit criterion)."""
+
+    def _setup_user_with_drafts(self, db, test_user_data):
+        """Create user + drafts with various statuses."""
+        from app.services.auth import AuthService
+        from app.schemas.auth import SignupRequest
+        from app.models import Message, Draft
+
+        svc = AuthService()
+        user = svc.signup(
+            db,
+            SignupRequest(
+                email="approval_rate@example.com",
+                password="Str0ng!Pass",
+                name="Rate Tester",
+            ),
+        )
+
+        msg = Message(
+            user_id=user.id,
+            channel="test",
+            sender_id="s1",
+            sender_name="Sender",
+            content="hi",
+            status="received",
+        )
+        db.add(msg)
+        db.flush()
+
+        statuses = ["approved", "approved", "edited", "rejected"]
+        for i, s in enumerate(statuses):
+            msg_i = Message(
+                user_id=user.id,
+                channel="test",
+                sender_id=f"s{i}",
+                sender_name="Sender",
+                content="hi",
+                status="received",
+            )
+            db.add(msg_i)
+            db.flush()
+            d = Draft(
+                message_id=msg_i.id,
+                user_id=user.id,
+                twin_id=user.twin.id,
+                content="draft content",
+                confidence_score=0.7,
+                confidence_label="Medium",
+                moderation_passed=True,
+                status=s,
+            )
+            db.add(d)
+        db.commit()
+        return user
+
+    def test_approval_rate_correct_value(self, test_db, test_user_data):
+        """approval_rate = (approved+edited) / (approved+edited+rejected) = 3/4 = 0.75"""
+        from app.services.twin import TwinService
+
+        user = self._setup_user_with_drafts(test_db, test_user_data)
+        stats = TwinService.get_twin_stats(test_db, user.id)
+
+        # 2 approved + 1 edited = 3 decided positively; 1 rejected; 4 total decided
+        assert stats["approval_rate"] == pytest.approx(0.75, abs=0.01)
+
+    def test_approval_rate_zero_when_no_decisions(self, test_db, test_user):
+        """When no drafts have been decided, approval_rate should be 0.0."""
+        from app.services.twin import TwinService
+
+        stats = TwinService.get_twin_stats(test_db, test_user.id)
+        assert stats["approval_rate"] == 0.0
+
+    def test_approval_rate_in_stats_response_key(self, test_db, test_user):
+        """approval_rate key must be present in get_twin_stats output."""
+        from app.services.twin import TwinService
+
+        stats = TwinService.get_twin_stats(test_db, test_user.id)
+        assert "approval_rate" in stats
+

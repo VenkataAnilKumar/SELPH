@@ -4,6 +4,7 @@ Draft management service for approval workflow
 
 from sqlalchemy.orm import Session
 from app.models import Draft, Message, Twin, AuditLog
+from app.services.twin_learning import TwinLearningService
 
 
 class DraftService:
@@ -141,6 +142,10 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+
+        # Phase 3.4: reinforce twin profile from approved draft
+        TwinLearningService.learn_from_approval(db, draft.twin_id, draft.content)
+
         return draft
     
     @staticmethod
@@ -186,6 +191,7 @@ class DraftService:
         if draft.user_id != user_id:
             raise ValueError("Unauthorized: Draft belongs to different user")
         
+        original_content = draft.content
         draft.edited_content = edited_content
         draft.status = "edited"
         draft.user_action = "edit"
@@ -201,6 +207,10 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+
+        # Phase 3.4: adapt twin profile from user's edit
+        TwinLearningService.learn_from_edit(db, draft.twin_id, original_content, edited_content)
+
         return draft
     
     @staticmethod
