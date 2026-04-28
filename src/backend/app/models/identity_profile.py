@@ -29,6 +29,9 @@ class IdentityProfile(BaseModel):
     voice_model_id = Column(String, nullable=True)
     voice_provider = Column(String, default="mock", nullable=False)
     voice_sample_url = Column(Text, nullable=True)
+    avatar_model_id = Column(String, nullable=True)
+    avatar_provider = Column(String, default="mock", nullable=False)
+    avatar_sample_url = Column(Text, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="identity_profile")
