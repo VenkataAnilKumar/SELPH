@@ -4,8 +4,7 @@ AuditLog model — immutable action trail for compliance
 
 from sqlalchemy import Column, String, Text, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.models.base import BaseModel
+from app.models.base import BaseModel, utcnow
 
 
 class AuditLog(BaseModel):
@@ -23,7 +22,7 @@ class AuditLog(BaseModel):
     user_agent = Column(String, nullable=True)
     
     # Timestamps
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=utcnow, nullable=False, index=True)
     
     # Relationships
     user = relationship("User", back_populates="audit_logs")

@@ -2,8 +2,7 @@
 Pydantic schemas for authentication
 """
 
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class SignupRequest(BaseModel):
@@ -12,14 +11,15 @@ class SignupRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
     name: str = Field(..., min_length=1, max_length=100)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "password": "securepassword123",
                 "name": "John Doe",
             }
         }
+    )
 
 
 class LoginRequest(BaseModel):
@@ -27,13 +27,14 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "password": "securepassword123",
             }
         }
+    )
 
 
 class TokenResponse(BaseModel):
@@ -51,8 +52,7 @@ class UserResponse(BaseModel):
     name: str
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuthResponse(BaseModel):

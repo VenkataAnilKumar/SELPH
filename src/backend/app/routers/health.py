@@ -3,7 +3,7 @@ Health check endpoints
 """
 
 from fastapi import APIRouter
-from datetime import datetime
+from datetime import datetime, UTC
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ async def health_check():
     """
     return {
         "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "service": "selph-backend",
     }
 
@@ -27,5 +27,5 @@ async def readiness_check():
     """
     return {
         "status": "ready",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

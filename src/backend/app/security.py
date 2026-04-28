@@ -2,7 +2,7 @@
 Security utilities for password hashing and JWT tokens
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 import logging
 import jwt
@@ -11,6 +11,11 @@ from app.config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return UTC now without deprecated utcnow()."""
+    return datetime.now(UTC)
 
 
 def _build_pwd_context() -> CryptContext:
@@ -59,9 +64,9 @@ def create_access_token(
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = _utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(hours=24)
+        expire = _utcnow() + timedelta(hours=24)
     
     to_encode.update({"exp": expire})
     
@@ -83,9 +88,9 @@ def create_refresh_token(
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = _utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=7)
+        expire = _utcnow() + timedelta(days=7)
 
     to_encode.update({"exp": expire})
 

@@ -4,7 +4,7 @@ Configuration and settings for SELPH Backend
 
 from functools import lru_cache
 from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -94,9 +94,7 @@ class Settings(BaseSettings):
     celery_task_time_limit: int = 300
     celery_task_soft_time_limit: int = 250
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 
 @lru_cache()
