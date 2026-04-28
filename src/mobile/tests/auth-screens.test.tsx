@@ -59,6 +59,7 @@ describe('Auth screens validation (mobile)', () => {
   it('shows signup validation errors for weak password and mismatch', () => {
     const { getByPlaceholderText, getByText } = render(<SignupScreen />)
 
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Test User')
     fireEvent.changeText(getByPlaceholderText('you@example.com'), 'test@example.com')
     fireEvent.changeText(
       getByPlaceholderText('Min 8 chars, uppercase, lowercase, number'),
@@ -75,6 +76,7 @@ describe('Auth screens validation (mobile)', () => {
   it('submits valid signup payload', () => {
     const { getByPlaceholderText, getByText } = render(<SignupScreen />)
 
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Test User')
     fireEvent.changeText(getByPlaceholderText('you@example.com'), 'test@example.com')
     fireEvent.changeText(
       getByPlaceholderText('Min 8 chars, uppercase, lowercase, number'),
@@ -83,7 +85,7 @@ describe('Auth screens validation (mobile)', () => {
     fireEvent.changeText(getByPlaceholderText('Re-enter your password'), 'Password1')
     fireEvent.press(getByText('Create Account'))
 
-    expect(signupMock).toHaveBeenCalledWith('test@example.com', 'Password1')
+    expect(signupMock).toHaveBeenCalledWith('test@example.com', 'Password1', 'Test User')
   })
 
   it('shows alert when login rejects', async () => {

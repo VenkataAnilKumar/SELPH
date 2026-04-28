@@ -42,31 +42,62 @@ interface Draft {
   created_at: string;
 }
 
+interface IdentityProfile {
+  vocabulary_description?: string | null;
+  communication_style?: string | null;
+  topics_known: string[];
+  topics_avoided: string[];
+  profile_complete: boolean;
+}
+
+interface ConnectedChannel {
+  channel: string;
+  connected: boolean;
+  scope?: string | null;
+  updated_at: string;
+}
+
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [twin, setTwin] = useState<Twin | null>(null);
   const [stats, setStats] = useState<TwinStats | null>(null);
   const [pendingDrafts, setPendingDrafts] = useState<Draft[]>([]);
+  const [identityProfile, setIdentityProfile] = useState<IdentityProfile | null>(null);
+  const [channels, setChannels] = useState<ConnectedChannel[]>([]);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [editDraftId, setEditDraftId] = useState<string | null>(null);
   const [editedContent, setEditedContent] = useState<string>("");
+  const [settingsDomain, setSettingsDomain] = useState<string>("");
+  const [settingsTone, setSettingsTone] = useState<string>("");
+  const [onboardingRole, setOnboardingRole] = useState<string>("");
+  const [onboardingStyle, setOnboardingStyle] = useState<string>("friendly");
+  const [onboardingAvoidedTopics, setOnboardingAvoidedTopics] = useState<string>("");
+  const [onboardingLength, setOnboardingLength] = useState<string>("medium");
+  const [onboardingAudienceTone, setOnboardingAudienceTone] = useState<string>("");
+  const [onboardingThreeWords, setOnboardingThreeWords] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const [twinResponse, statsResponse, draftsResponse] = await Promise.all([
+        const [twinResponse, statsResponse, draftsResponse, identityResponse, channelsResponse] = await Promise.all([
           apiClient.get("/twin/me"),
           apiClient.get("/twin/stats"),
           apiClient.get("/drafts/pending"),
+          apiClient.get("/identity/profile"),
+          apiClient.get("/channels/connected"),
         ]);
 
         setTwin(twinResponse.data);
+        setSettingsDomain(twinResponse.data.domain || "");
+        setSettingsTone(twinResponse.data.tone || "");
         setStats(statsResponse.data);
         setPendingDrafts(draftsResponse.data);
+        setIdentityProfile(identityResponse.data);
+        setChannels(channelsResponse.data);
         setError(null);
       } catch (err: any) {
         setError(
@@ -81,13 +112,15 @@ export default function DashboardPage() {
   }, []);
 
   const refreshDashboard = async () => {
-    const [statsResponse, draftsResponse] = await Promise.all([
+    const [statsResponse, draftsResponse, channelsResponse] = await Promise.all([
       apiClient.get("/twin/stats"),
       apiClient.get("/drafts/pending"),
+      apiClient.get("/channels/connected"),
     ]);
 
     setStats(statsResponse.data);
     setPendingDrafts(draftsResponse.data);
+    setChannels(channelsResponse.data);
   };
 
   // Auto-refresh: 30-second interval + visibility-change revalidation
@@ -138,6 +171,97 @@ export default function DashboardPage() {
       );
     } finally {
       setActiveDraftId(null);
+    }
+  };
+
+  const handleCompleteOnboarding = async () => {
+    try {
+      setActionError(null);
+      const avoided = onboardingAvoidedTopics
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const threeWords = onboardingThreeWords
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      await apiClient.post("/identity/onboard", {
+        role: onboardingRole,
+        communication_style: onboardingStyle,
+        topics_avoided: avoided,
+        response_length: onboardingLength,
+        audience_tone: onboardingAudienceTone,
+        three_words: threeWords,
+      });
+
+      const [identityResponse, twinResponse] = await Promise.all([
+        apiClient.get("/identity/profile"),
+        apiClient.get("/twin/me"),
+      ]);
+
+      setIdentityProfile(identityResponse.data);
+      setTwin(twinResponse.data);
+      setSettingsDomain(twinResponse.data.domain || "");
+      setSettingsTone(twinResponse.data.tone || "");
+      setActionMessage("Onboarding saved. Your twin is now configured.");
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to complete onboarding");
+    }
+  };
+
+  const connectChannel = async (channel: "instagram" | "gmail") => {
+    try {
+      setActionError(null);
+      const endpoint = channel === "instagram" ? "/channels/instagram/connect" : "/channels/gmail/connect";
+      await apiClient.post(endpoint, {});
+      await refreshDashboard();
+      setActionMessage(`${channel} connected successfully.`);
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || `Failed to connect ${channel}`);
+    }
+  };
+
+  const disconnectChannel = async (channel: string) => {
+    try {
+      setActionError(null);
+      await apiClient.post(`/channels/${channel}/disconnect`);
+      await refreshDashboard();
+      setActionMessage(`${channel} disconnected.`);
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || `Failed to disconnect ${channel}`);
+    }
+  };
+
+  const toggleTwinStatus = async () => {
+    if (!twin) return;
+    try {
+      setActionError(null);
+      const response = twin.status === "active"
+        ? await apiClient.post("/twin/pause")
+        : await apiClient.post("/twin/resume");
+      setTwin(response.data);
+      setActionMessage(
+        response.data.status === "active"
+          ? "Twin resumed and processing is active."
+          : "Twin paused successfully."
+      );
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to update twin status");
+    }
+  };
+
+  const updateTwinSettings = async () => {
+    try {
+      setActionError(null);
+      const response = await apiClient.put("/twin/me", {
+        domain: settingsDomain,
+        tone: settingsTone,
+      });
+      setTwin(response.data);
+      setActionMessage("Twin settings updated.");
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to update twin settings");
     }
   };
 
@@ -286,6 +410,140 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {identityProfile && !identityProfile.profile_complete && (
+            <section className="mt-8 rounded-lg bg-white p-8 shadow">
+              <h2 className="text-2xl font-bold text-gray-900">Identity Onboarding</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Configure your twin's voice before live channel usage.
+              </p>
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <input
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Role or domain"
+                  value={onboardingRole}
+                  onChange={(event) => setOnboardingRole(event.target.value)}
+                />
+                <select
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={onboardingStyle}
+                  onChange={(event) => setOnboardingStyle(event.target.value)}
+                >
+                  <option value="formal">formal</option>
+                  <option value="casual">casual</option>
+                  <option value="friendly">friendly</option>
+                  <option value="direct">direct</option>
+                  <option value="humorous">humorous</option>
+                </select>
+                <input
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-2"
+                  placeholder="Topics to avoid (comma separated)"
+                  value={onboardingAvoidedTopics}
+                  onChange={(event) => setOnboardingAvoidedTopics(event.target.value)}
+                />
+                <select
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={onboardingLength}
+                  onChange={(event) => setOnboardingLength(event.target.value)}
+                >
+                  <option value="short">short</option>
+                  <option value="medium">medium</option>
+                  <option value="detailed">detailed</option>
+                </select>
+                <input
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Audience tone"
+                  value={onboardingAudienceTone}
+                  onChange={(event) => setOnboardingAudienceTone(event.target.value)}
+                />
+                <input
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-2"
+                  placeholder="Three words describing you (comma separated)"
+                  value={onboardingThreeWords}
+                  onChange={(event) => setOnboardingThreeWords(event.target.value)}
+                />
+              </div>
+              <button
+                onClick={handleCompleteOnboarding}
+                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Save Onboarding
+              </button>
+            </section>
+          )}
+
+          <section className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div className="rounded-lg bg-white p-8 shadow">
+              <h2 className="text-2xl font-bold text-gray-900">Channel Connections</h2>
+              <p className="mt-1 text-sm text-gray-600">Connect Instagram and Gmail to receive incoming messages.</p>
+              <div className="mt-6 space-y-4">
+                {["instagram", "gmail"].map((channel) => {
+                  const current = channels.find((item) => item.channel === channel);
+                  const connected = !!current?.connected;
+                  return (
+                    <div key={channel} className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
+                      <div>
+                        <p className="font-medium text-gray-900 capitalize">{channel}</p>
+                        <p className="text-xs text-gray-500">
+                          {connected ? "Connected" : "Not connected"}
+                        </p>
+                      </div>
+                      {connected ? (
+                        <button
+                          onClick={() => disconnectChannel(channel)}
+                          className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700"
+                        >
+                          Disconnect
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => connectChannel(channel as "instagram" | "gmail")}
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700"
+                        >
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-white p-8 shadow">
+              <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+              <p className="mt-1 text-sm text-gray-600">Pause/resume your twin and tune its profile.</p>
+              <div className="mt-6 space-y-3">
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Domain"
+                  value={settingsDomain}
+                  onChange={(event) => setSettingsDomain(event.target.value)}
+                />
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Tone"
+                  value={settingsTone}
+                  onChange={(event) => setSettingsTone(event.target.value)}
+                />
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={updateTwinSettings}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    Update Tone/Domain
+                  </button>
+                  <button
+                    onClick={toggleTwinStatus}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${
+                      twin?.status === "active" ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                  >
+                    {twin?.status === "active" ? "Pause Twin" : "Resume Twin"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <div className="mt-12 grid grid-cols-1 gap-8 xl:grid-cols-[2fr_1fr]">
             <section className="rounded-lg bg-white p-8 shadow">

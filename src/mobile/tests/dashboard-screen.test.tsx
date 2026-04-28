@@ -12,6 +12,8 @@ jest.mock('@/lib/auth-context', () => ({
 jest.mock('@selph/shared', () => ({
   apiClient: {
     get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
     approveDraft: jest.fn(),
   },
 }))
@@ -70,11 +72,30 @@ describe('Dashboard screen (mobile)', () => {
     ],
   }
 
+  const identityResponse = {
+    data: {
+      vocabulary_description: 'focused, clear, supportive',
+      communication_style: 'friendly',
+      topics_known: ['productivity'],
+      topics_avoided: ['politics'],
+      profile_complete: true,
+    },
+  }
+
+  const channelsResponse = {
+    data: [
+      { channel: 'instagram', connected: false, scope: null, updated_at: '2026-01-01T00:00:00Z' },
+      { channel: 'gmail', connected: false, scope: null, updated_at: '2026-01-01T00:00:00Z' },
+    ],
+  }
+
   const primeDashboardFetches = () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(twinResponse)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce(pendingDraftsResponse)
+      .mockResolvedValueOnce(identityResponse)
+      .mockResolvedValueOnce(channelsResponse)
   }
 
   beforeEach(() => {
@@ -195,6 +216,7 @@ describe('Dashboard screen (mobile)', () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(channelsResponse)
 
     const { getByText } = render(<DashboardScreen />)
 
@@ -228,6 +250,7 @@ describe('Dashboard screen (mobile)', () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(channelsResponse)
 
     const { getByText } = render(<DashboardScreen />)
 
@@ -239,8 +262,8 @@ describe('Dashboard screen (mobile)', () => {
     appStateHandler?.('active')
 
     await waitFor(() => {
-      // initial: 3 calls; foreground refresh: 2 calls = 5 total
-      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(5)
+      // initial: 5 calls; foreground refresh: 3 calls = 8 total
+      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(8)
     })
 
     jest.restoreAllMocks()

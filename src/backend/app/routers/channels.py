@@ -3,9 +3,32 @@ Channel integration endpoints
 /v1/channels/*
 """
 
-from fastapi import APIRouter, HTTPException, status, Header
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.database import get_db
+from app.middleware.auth import get_current_user
+from app.models import User, ChannelCredential
+from app.schemas.channels import (
+    ChannelConnectRequest,
+    ChannelConnectResponse,
+    ConnectedChannelResponse,
+)
+
+router = APIRouter(tags=["Channels"])
+
+
+SUPPORTED_CHANNELS = {"instagram", "gmail"}
+
+
+def _validate_channel(channel: str) -> str:
+    normalized = channel.strip().lower()
+    if normalized not in SUPPORTED_CHANNELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported channel '{channel}'. Supported: instagram, gmail",
+        )
+    return normalized
 
 
 # ============================================================================
@@ -37,16 +60,42 @@ async def instagram_webhook(body: dict):
     )
 
 
-@router.get("/instagram/connect")
-async def instagram_oauth():
+@router.post("/instagram/connect", response_model=ChannelConnectResponse)
+async def connect_instagram(
+    request: ChannelConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Initiate Instagram OAuth flow
     """
-    # TODO: Phase 5 — redirect to Meta OAuth consent screen
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Instagram OAuth endpoint coming in Phase 5"
+    existing = db.query(ChannelCredential).filter(
+        ChannelCredential.user_id == current_user.id,
+        ChannelCredential.channel == "instagram",
+    ).first()
+
+    token_value = request.credential_value or "instagram_connected"
+
+    if existing:
+        existing.credential_value = token_value
+        existing.scope = request.scope
+        existing.is_active = True
+        db.commit()
+        db.refresh(existing)
+        return ChannelConnectResponse(channel="instagram", connected=True)
+
+    credential = ChannelCredential(
+        user_id=current_user.id,
+        channel="instagram",
+        credential_type="oauth_token",
+        credential_value=token_value,
+        scope=request.scope,
+        is_active=True,
     )
+    db.add(credential)
+    db.commit()
+
+    return ChannelConnectResponse(channel="instagram", connected=True)
 
 
 @router.get("/instagram/callback")
@@ -65,16 +114,42 @@ async def instagram_callback(code: str = None, state: str = None):
 # GMAIL
 # ============================================================================
 
-@router.get("/gmail/connect")
-async def gmail_oauth():
+@router.post("/gmail/connect", response_model=ChannelConnectResponse)
+async def connect_gmail(
+    request: ChannelConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Initiate Gmail OAuth flow
     """
-    # TODO: Phase 5 — redirect to Google OAuth consent screen
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Gmail OAuth endpoint coming in Phase 5"
+    existing = db.query(ChannelCredential).filter(
+        ChannelCredential.user_id == current_user.id,
+        ChannelCredential.channel == "gmail",
+    ).first()
+
+    token_value = request.credential_value or "gmail_connected"
+
+    if existing:
+        existing.credential_value = token_value
+        existing.scope = request.scope
+        existing.is_active = True
+        db.commit()
+        db.refresh(existing)
+        return ChannelConnectResponse(channel="gmail", connected=True)
+
+    credential = ChannelCredential(
+        user_id=current_user.id,
+        channel="gmail",
+        credential_type="oauth_token",
+        credential_value=token_value,
+        scope=request.scope,
+        is_active=True,
     )
+    db.add(credential)
+    db.commit()
+
+    return ChannelConnectResponse(channel="gmail", connected=True)
 
 
 @router.get("/gmail/callback")
@@ -106,25 +181,53 @@ async def gmail_webhook(body: dict):
 # CHANNEL MANAGEMENT
 # ============================================================================
 
-@router.get("/connected")
-async def list_connected_channels():
+@router.get("/connected", response_model=list[ConnectedChannelResponse])
+async def list_connected_channels(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     List all connected channels for current user
     """
-    # TODO: Phase 5 — fetch connected channels from DB
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="List channels endpoint coming in Phase 5"
-    )
+    credentials = db.query(ChannelCredential).filter(
+        ChannelCredential.user_id == current_user.id,
+    ).all()
+
+    return [
+        ConnectedChannelResponse(
+            channel=credential.channel,
+            connected=credential.is_active,
+            scope=credential.scope,
+            updated_at=credential.updated_at,
+        )
+        for credential in credentials
+    ]
 
 
 @router.post("/{channel}/disconnect")
-async def disconnect_channel(channel: str):
+async def disconnect_channel(
+    channel: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Disconnect a channel (revoke tokens, delete credentials)
     """
-    # TODO: Phase 5 — delete channel tokens, revoke OAuth grants
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Disconnect channel endpoint coming in Phase 5"
-    )
+    normalized = _validate_channel(channel)
+
+    credential = db.query(ChannelCredential).filter(
+        ChannelCredential.user_id == current_user.id,
+        ChannelCredential.channel == normalized,
+        ChannelCredential.is_active.is_(True),
+    ).first()
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{normalized} channel is not connected",
+        )
+
+    credential.is_active = False
+    db.commit()
+
+    return {"channel": normalized, "connected": False}

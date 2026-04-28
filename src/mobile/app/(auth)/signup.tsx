@@ -17,10 +17,12 @@ import { useMobileAuth } from '@/lib/auth-context'
 
 export default function SignupScreen() {
   const { signup, error, clearError, loading } = useMobileAuth()
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [validationErrors, setValidationErrors] = useState<{
+    name?: string
     email?: string
     password?: string
     confirmPassword?: string
@@ -51,6 +53,8 @@ export default function SignupScreen() {
     // Validation
     const newErrors: typeof validationErrors = {}
 
+    if (!name || !name.trim()) newErrors.name = 'Name is required'
+
     if (!email) newErrors.email = 'Email is required'
     else if (!validateEmail(email)) newErrors.email = 'Please enter a valid email'
 
@@ -68,7 +72,7 @@ export default function SignupScreen() {
     }
 
     try {
-      await signup(email, password)
+      await signup(email, password, name.trim())
     } catch (err: any) {
       Alert.alert('Signup Failed', error || 'Please try again')
     }
@@ -92,6 +96,23 @@ export default function SignupScreen() {
 
         {/* Form */}
         <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={[
+                styles.input,
+                validationErrors.name ? styles.inputError : {},
+              ]}
+              placeholder="Your full name"
+              value={name}
+              onChangeText={setName}
+              editable={!loading}
+            />
+            {validationErrors.name && (
+              <Text style={styles.fieldError}>{validationErrors.name}</Text>
+            )}
+          </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
             <TextInput
