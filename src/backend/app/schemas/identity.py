@@ -155,3 +155,44 @@ class VoiceEnrollmentResponse(BaseModel):
     voice_model_id: Optional[str] = None
     voice_sample_url: Optional[str] = None
     consent_granted: bool
+
+
+class AvatarConsentRequest(BaseModel):
+    """Grant or revoke avatar clone consent."""
+
+    granted: bool
+
+
+class AvatarConsentResponse(BaseModel):
+    """Avatar consent state for the current user."""
+
+    consent_type: str
+    granted: bool
+    granted_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+class AvatarEnrollmentRequest(BaseModel):
+    """Avatar profile enrollment payload."""
+
+    avatar_provider: str = "mock"
+    avatar_model_id: Optional[str] = None
+    avatar_sample_url: Optional[str] = None
+
+    @field_validator("avatar_provider")
+    @classmethod
+    def validate_avatar_provider(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"mock", "heygen"}:
+            raise ValueError("avatar_provider must be 'mock' or 'heygen'")
+        return normalized
+
+
+class AvatarEnrollmentResponse(BaseModel):
+    """Avatar profile enrollment status."""
+
+    enrolled: bool
+    avatar_provider: Optional[str] = None
+    avatar_model_id: Optional[str] = None
+    avatar_sample_url: Optional[str] = None
+    consent_granted: bool

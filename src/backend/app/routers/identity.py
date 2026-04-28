@@ -22,6 +22,10 @@ from app.schemas.identity import (
     VoiceConsentResponse,
     VoiceEnrollmentRequest,
     VoiceEnrollmentResponse,
+    AvatarConsentRequest,
+    AvatarConsentResponse,
+    AvatarEnrollmentRequest,
+    AvatarEnrollmentResponse,
     RESPONSE_LENGTH_MAP,
 )
 from typing import List
@@ -367,5 +371,116 @@ async def clear_voice_profile(
         voice_provider=profile.voice_provider,
         voice_model_id=profile.voice_model_id,
         voice_sample_url=profile.voice_sample_url,
+        consent_granted=consent_granted,
+    )
+
+
+# ── Avatar Clone (Phase 7 PR B) ─────────────────────────────────────────────
+
+@router.get("/avatar/consent", response_model=AvatarConsentResponse)
+async def get_avatar_consent(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current avatar clone consent state."""
+    consent = IdentityService.get_avatar_consent(db, current_user.id)
+    if not consent:
+        return AvatarConsentResponse(
+            consent_type="avatar_clone",
+            granted=False,
+            granted_at=None,
+            expires_at=None,
+        )
+
+    return AvatarConsentResponse(
+        consent_type=consent.consent_type,
+        granted=consent.granted,
+        granted_at=consent.granted_at.isoformat() if consent.granted_at else None,
+        expires_at=consent.expires_at.isoformat() if consent.expires_at else None,
+    )
+
+
+@router.post("/avatar/consent", response_model=AvatarConsentResponse)
+async def set_avatar_consent(
+    request: AvatarConsentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Grant or revoke consent for avatar cloning."""
+    consent = IdentityService.set_avatar_consent(db, current_user.id, request.granted)
+    if not request.granted:
+        # Revoke enrolled avatar data when consent is revoked.
+        IdentityService.clear_avatar_profile(db, current_user.id)
+
+    return AvatarConsentResponse(
+        consent_type=consent.consent_type,
+        granted=consent.granted,
+        granted_at=consent.granted_at.isoformat() if consent.granted_at else None,
+        expires_at=consent.expires_at.isoformat() if consent.expires_at else None,
+    )
+
+
+@router.get("/avatar/profile", response_model=AvatarEnrollmentResponse)
+async def get_avatar_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current avatar enrollment metadata and consent state."""
+    profile = IdentityService.get_identity_profile(db, current_user.id)
+    consent_granted = IdentityService.is_avatar_consent_granted(db, current_user.id)
+    enrolled = bool(profile and profile.avatar_model_id)
+
+    return AvatarEnrollmentResponse(
+        enrolled=enrolled,
+        avatar_provider=profile.avatar_provider if profile else None,
+        avatar_model_id=profile.avatar_model_id if profile else None,
+        avatar_sample_url=profile.avatar_sample_url if profile else None,
+        consent_granted=consent_granted,
+    )
+
+
+@router.post("/avatar/enroll", response_model=AvatarEnrollmentResponse)
+async def enroll_avatar_profile(
+    request: AvatarEnrollmentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Enroll or update an avatar profile after explicit avatar clone consent."""
+    if not IdentityService.is_avatar_consent_granted(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Avatar clone consent is required before enrollment",
+        )
+
+    profile = IdentityService.enroll_avatar_profile(
+        db,
+        user_id=current_user.id,
+        avatar_provider=request.avatar_provider,
+        avatar_model_id=request.avatar_model_id,
+        avatar_sample_url=request.avatar_sample_url,
+    )
+
+    return AvatarEnrollmentResponse(
+        enrolled=bool(profile.avatar_model_id),
+        avatar_provider=profile.avatar_provider,
+        avatar_model_id=profile.avatar_model_id,
+        avatar_sample_url=profile.avatar_sample_url,
+        consent_granted=True,
+    )
+
+
+@router.delete("/avatar/profile", response_model=AvatarEnrollmentResponse)
+async def clear_avatar_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Clear avatar enrollment metadata while leaving consent unchanged."""
+    profile = IdentityService.clear_avatar_profile(db, current_user.id)
+    consent_granted = IdentityService.is_avatar_consent_granted(db, current_user.id)
+    return AvatarEnrollmentResponse(
+        enrolled=False,
+        avatar_provider=profile.avatar_provider,
+        avatar_model_id=profile.avatar_model_id,
+        avatar_sample_url=profile.avatar_sample_url,
         consent_granted=consent_granted,
     )

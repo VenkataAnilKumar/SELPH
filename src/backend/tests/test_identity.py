@@ -390,3 +390,107 @@ class TestVoiceCloneEnrollment:
         assert client.post("/v1/identity/voice/enroll", json={"voice_provider": "mock"}).status_code == 403
         assert client.get("/v1/identity/voice/profile").status_code == 403
         assert client.delete("/v1/identity/voice/profile").status_code == 403
+
+
+# ── Avatar Clone (Phase 7 PR B) ─────────────────────────────────────────────
+
+class TestAvatarCloneEnrollment:
+    def test_avatar_consent_defaults_to_false(self, client, auth_headers):
+        response = client.get("/v1/identity/avatar/consent", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["consent_type"] == "avatar_clone"
+        assert data["granted"] is False
+
+    def test_grant_and_revoke_avatar_consent(self, client, auth_headers):
+        grant = client.post(
+            "/v1/identity/avatar/consent",
+            json={"granted": True},
+            headers=auth_headers,
+        )
+        assert grant.status_code == 200
+        assert grant.json()["granted"] is True
+        assert grant.json()["granted_at"] is not None
+
+        revoke = client.post(
+            "/v1/identity/avatar/consent",
+            json={"granted": False},
+            headers=auth_headers,
+        )
+        assert revoke.status_code == 200
+        assert revoke.json()["granted"] is False
+
+    def test_enroll_requires_consent(self, client, auth_headers):
+        response = client.post(
+            "/v1/identity/avatar/enroll",
+            json={
+                "avatar_provider": "mock",
+                "avatar_model_id": "avatar-001",
+                "avatar_sample_url": "https://example.com/sample.mp4",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 409
+
+    def test_enroll_after_consent_and_fetch_profile(self, client, auth_headers):
+        client.post(
+            "/v1/identity/avatar/consent",
+            json={"granted": True},
+            headers=auth_headers,
+        )
+
+        enroll = client.post(
+            "/v1/identity/avatar/enroll",
+            json={
+                "avatar_provider": "mock",
+                "avatar_model_id": "avatar-001",
+                "avatar_sample_url": "https://example.com/sample.mp4",
+            },
+            headers=auth_headers,
+        )
+        assert enroll.status_code == 200
+        data = enroll.json()
+        assert data["enrolled"] is True
+        assert data["avatar_provider"] == "mock"
+        assert data["avatar_model_id"] == "avatar-001"
+        assert data["consent_granted"] is True
+
+        profile = client.get("/v1/identity/avatar/profile", headers=auth_headers)
+        assert profile.status_code == 200
+        profile_data = profile.json()
+        assert profile_data["enrolled"] is True
+        assert profile_data["avatar_model_id"] == "avatar-001"
+
+    def test_clear_avatar_profile(self, client, auth_headers):
+        client.post("/v1/identity/avatar/consent", json={"granted": True}, headers=auth_headers)
+        client.post(
+            "/v1/identity/avatar/enroll",
+            json={"avatar_provider": "mock", "avatar_model_id": "avatar-123"},
+            headers=auth_headers,
+        )
+
+        clear = client.delete("/v1/identity/avatar/profile", headers=auth_headers)
+        assert clear.status_code == 200
+        assert clear.json()["enrolled"] is False
+        assert clear.json()["avatar_model_id"] is None
+
+    def test_revoke_consent_clears_avatar_profile(self, client, auth_headers):
+        client.post("/v1/identity/avatar/consent", json={"granted": True}, headers=auth_headers)
+        client.post(
+            "/v1/identity/avatar/enroll",
+            json={"avatar_provider": "mock", "avatar_model_id": "avatar-xyz"},
+            headers=auth_headers,
+        )
+
+        client.post("/v1/identity/avatar/consent", json={"granted": False}, headers=auth_headers)
+        profile = client.get("/v1/identity/avatar/profile", headers=auth_headers)
+        assert profile.status_code == 200
+        assert profile.json()["enrolled"] is False
+        assert profile.json()["avatar_model_id"] is None
+
+    def test_avatar_endpoints_require_auth(self, client):
+        assert client.get("/v1/identity/avatar/consent").status_code == 403
+        assert client.post("/v1/identity/avatar/consent", json={"granted": True}).status_code == 403
+        assert client.post("/v1/identity/avatar/enroll", json={"avatar_provider": "mock"}).status_code == 403
+        assert client.get("/v1/identity/avatar/profile").status_code == 403
+        assert client.delete("/v1/identity/avatar/profile").status_code == 403
