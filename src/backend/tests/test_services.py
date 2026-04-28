@@ -540,6 +540,84 @@ class TestTwinEngineService:
         result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
         assert len(result["draft"].split()) <= 100
 
+    def test_pipeline_uses_llm_when_feature_enabled(self, test_db, test_user, monkeypatch):
+        """When feature flag is enabled, pipeline should use LLM output."""
+        from app.services import twin_engine as twin_engine_module
+
+        prev_flag = twin_engine_module.settings.feature_twin_llm_drafts
+        twin_engine_module.settings.feature_twin_llm_drafts = True
+
+        def fake_call(_messages):
+            return (
+                '{"draft":"LLM generated reply","confidence_factors":'
+                '{"topic_known":0.9,"length_match":0.8,"tone_match":0.85,'
+                '"no_avoided_topics":1.0,"sample_similarity":0.7},'
+                '"reasoning":"Matched user style","flags":[]}'
+            )
+
+        monkeypatch.setattr(TwinEngineService, "_call_litellm", staticmethod(fake_call))
+
+        try:
+            message = MessageService.create_message(
+                test_db,
+                test_user.id,
+                "instagram_dm",
+                "sender_llm",
+                "Morgan",
+                "Can you help with launch messaging?",
+                {},
+            )
+
+            result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+            assert result["draft"] == "LLM generated reply"
+            assert result["generation_source"] == "llm"
+            assert result["confidence_factors"]["topic_known"] == 0.9
+        finally:
+            twin_engine_module.settings.feature_twin_llm_drafts = prev_flag
+
+    def test_pipeline_retries_invalid_llm_json_then_succeeds(self, test_db, test_user, monkeypatch):
+        """Invalid JSON from LLM should trigger one retry and then succeed."""
+        from app.services import twin_engine as twin_engine_module
+
+        prev_llm = twin_engine_module.settings.feature_twin_llm_drafts
+        prev_retry = twin_engine_module.settings.feature_twin_llm_json_retry
+        twin_engine_module.settings.feature_twin_llm_drafts = True
+        twin_engine_module.settings.feature_twin_llm_json_retry = True
+
+        calls = {"count": 0}
+
+        def fake_call(_messages):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return "not-json"
+            return (
+                '{"draft":"Retried valid JSON draft","confidence_factors":'
+                '{"topic_known":0.7,"length_match":0.7,"tone_match":0.7,'
+                '"no_avoided_topics":1.0,"sample_similarity":0.6},'
+                '"reasoning":"Retry fixed structure","flags":[]}'
+            )
+
+        monkeypatch.setattr(TwinEngineService, "_call_litellm", staticmethod(fake_call))
+
+        try:
+            message = MessageService.create_message(
+                test_db,
+                test_user.id,
+                "gmail",
+                "sender_retry",
+                "Riley",
+                "Please send a concise update.",
+                {},
+            )
+
+            result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+            assert result["draft"] == "Retried valid JSON draft"
+            assert result["generation_source"] == "llm"
+            assert calls["count"] == 2
+        finally:
+            twin_engine_module.settings.feature_twin_llm_drafts = prev_llm
+            twin_engine_module.settings.feature_twin_llm_json_retry = prev_retry
+
 
 class TestModerationService:
     """Test moderation service"""
