@@ -3,6 +3,7 @@ Integration tests for backend API endpoints
 """
 
 import pytest
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.models import AuditLog, Draft
@@ -444,6 +445,140 @@ class TestDraftEndpoints:
         response = client.get("/v1/drafts/pending")
         
         assert response.status_code == 403
+
+    @patch("app.routers.drafts.get_settings")
+    @patch("app.routers.drafts.synthesize_voice")
+    def test_generate_voice_queues_task_for_approved_draft(
+        self,
+        mock_synthesize_voice,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Approved draft with consent should queue voice synthesis task."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        # Grant voice consent
+        client.post("/v1/identity/voice/consent", headers=auth_headers, json={"granted": True})
+
+        mock_settings.return_value.feature_voice_clone = True
+        mock_task = MagicMock()
+        mock_task.id = "task-voice-123"
+        mock_synthesize_voice.delay.return_value = mock_task
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/voice/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["draft_id"] == draft.id
+        assert data["queued"] is True
+        assert data["voice_status"] == "queued"
+        assert data["task_id"] == "task-voice-123"
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_voice_requires_consent(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Voice generation should fail when consent is missing."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        mock_settings.return_value.feature_voice_clone = True
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/voice/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 409
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_voice_requires_approved_or_edited_status(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Pending drafts cannot be queued for voice synthesis."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+
+        client.post("/v1/identity/voice/consent", headers=auth_headers, json={"granted": True})
+        mock_settings.return_value.feature_voice_clone = True
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/voice/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 409
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_voice_disabled_feature_returns_503(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Feature flag off should return service unavailable."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        client.post("/v1/identity/voice/consent", headers=auth_headers, json={"granted": True})
+        mock_settings.return_value.feature_voice_clone = False
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/voice/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 503
+
+    def test_get_draft_voice_status(self, client, auth_headers, test_db, test_user_data):
+        """Voice status endpoint should return persisted voice metadata."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+
+        DraftService.set_voice_status(
+            test_db,
+            draft.id,
+            voice_status="generated",
+            voice_audio_url="mock://voice/test.mp3",
+            voice_provider="mock",
+            voice_model_id="voice-test-1",
+            voice_error=None,
+        )
+
+        response = client.get(f"/v1/drafts/{draft.id}/voice", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["voice_status"] == "generated"
+        assert data["voice_audio_url"] == "mock://voice/test.mp3"
+        assert data["voice_provider"] == "mock"
+        assert data["voice_model_id"] == "voice-test-1"
 
 
 class TestPushTokenEndpoints:
