@@ -572,6 +572,10 @@ class TestTwinEngineService:
             assert result["draft"] == "LLM generated reply"
             assert result["generation_source"] == "llm"
             assert result["confidence_factors"]["topic_known"] == 0.9
+            assert "metrics" in result
+            assert "pipeline_latency_ms" in result["metrics"]
+            assert "llm_latency_ms" in result["metrics"]
+            assert result["metrics"]["used_fallback"] is False
         finally:
             twin_engine_module.settings.feature_twin_llm_drafts = prev_flag
 
@@ -614,9 +618,40 @@ class TestTwinEngineService:
             assert result["draft"] == "Retried valid JSON draft"
             assert result["generation_source"] == "llm"
             assert calls["count"] == 2
+            assert result["metrics"]["parse_retry_count"] == 1
         finally:
             twin_engine_module.settings.feature_twin_llm_drafts = prev_llm
             twin_engine_module.settings.feature_twin_llm_json_retry = prev_retry
+
+    def test_pipeline_metrics_show_fallback_when_llm_fails(self, test_db, test_user, monkeypatch):
+        """If LLM fails, deterministic fallback should be reported in metrics."""
+        from app.services import twin_engine as twin_engine_module
+
+        prev_flag = twin_engine_module.settings.feature_twin_llm_drafts
+        twin_engine_module.settings.feature_twin_llm_drafts = True
+
+        def fail_call(_messages):
+            raise RuntimeError("simulated provider failure")
+
+        monkeypatch.setattr(TwinEngineService, "_call_litellm", staticmethod(fail_call))
+
+        try:
+            message = MessageService.create_message(
+                test_db,
+                test_user.id,
+                "instagram_dm",
+                "sender_llm_fail",
+                "Casey",
+                "Need your thoughts on creator workflows",
+                {},
+            )
+
+            result = TwinEngineService.run_twin_pipeline(test_db, message.id, test_user.id)
+            assert result["generation_source"] == "deterministic"
+            assert result["metrics"]["used_fallback"] is True
+            assert result["metrics"]["llm_calls"] == 0
+        finally:
+            twin_engine_module.settings.feature_twin_llm_drafts = prev_flag
 
 
 class TestModerationService:
