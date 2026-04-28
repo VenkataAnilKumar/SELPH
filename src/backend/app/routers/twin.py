@@ -14,6 +14,7 @@ from app.schemas import (
     TwinStatsResponse,
     TwinQualitySummaryResponse,
     TwinWeeklyDigestResponse,
+    TwinPerformanceSummaryResponse,
     UpdateTwinRequest,
 )
 
@@ -165,4 +166,21 @@ async def get_twin_weekly_digest(
         )
 
     return TwinWeeklyDigestResponse(**digest)
+
+
+@router.get("/performance-summary", response_model=TwinPerformanceSummaryResponse)
+async def get_twin_performance_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Phase 8 performance summary for the <10s draft-generation target."""
+    performance = TwinService.get_performance_summary(db, current_user.id)
+
+    if not performance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Twin not found",
+        )
+
+    return TwinPerformanceSummaryResponse(**performance)
 

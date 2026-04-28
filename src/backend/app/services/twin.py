@@ -263,3 +263,56 @@ class TwinService:
             "pending_drafts": pending_drafts,
             "summary_line": summary_line,
         }
+
+    @staticmethod
+    def get_performance_summary(db: Session, user_id: str) -> dict:
+        """Return 7-day draft-generation performance metrics for Phase 8 optimization."""
+        from app.models import Draft
+
+        twin = TwinService.get_twin(db, user_id)
+        if not twin:
+            return None
+
+        since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+        draft_rows = db.query(Draft.pipeline_latency_ms).filter(
+            Draft.user_id == user_id,
+            Draft.created_at >= since,
+            Draft.pipeline_latency_ms.is_not(None),
+        ).all()
+
+        latencies = sorted([row[0] for row in draft_rows if row[0] is not None])
+        drafts_measured_7d = len(latencies)
+
+        if drafts_measured_7d == 0:
+            return {
+                "twin_id": twin.id,
+                "drafts_measured_7d": 0,
+                "avg_pipeline_latency_ms_7d": 0,
+                "p95_pipeline_latency_ms_7d": 0,
+                "drafts_over_10s_7d": 0,
+                "on_target_under_10s": True,
+                "recommendation": "No recent drafts measured. Generate traffic to establish a performance baseline.",
+            }
+
+        avg_pipeline_latency_ms_7d = int(round(sum(latencies) / drafts_measured_7d))
+        p95_index = max(0, int(round(0.95 * drafts_measured_7d)) - 1)
+        p95_pipeline_latency_ms_7d = int(latencies[p95_index])
+        drafts_over_10s_7d = sum(1 for value in latencies if value > 10000)
+        on_target_under_10s = p95_pipeline_latency_ms_7d < 10000
+
+        if on_target_under_10s:
+            recommendation = "Pipeline latency is healthy. Keep current model and queue settings."
+        elif drafts_over_10s_7d > max(2, int(0.2 * drafts_measured_7d)):
+            recommendation = "Frequent slow drafts detected. Consider lighter models and queue concurrency tuning."
+        else:
+            recommendation = "Latency is borderline. Monitor provider latency spikes and fallback behavior."
+
+        return {
+            "twin_id": twin.id,
+            "drafts_measured_7d": drafts_measured_7d,
+            "avg_pipeline_latency_ms_7d": avg_pipeline_latency_ms_7d,
+            "p95_pipeline_latency_ms_7d": p95_pipeline_latency_ms_7d,
+            "drafts_over_10s_7d": drafts_over_10s_7d,
+            "on_target_under_10s": on_target_under_10s,
+            "recommendation": recommendation,
+        }

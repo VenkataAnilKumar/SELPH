@@ -17,6 +17,7 @@ from app.schemas.twin import (
     TwinStatsResponse,
     TwinQualitySummaryResponse,
     TwinWeeklyDigestResponse,
+    TwinPerformanceSummaryResponse,
     UpdateTwinRequest,
     MessageResponse,
     DraftResponse,
@@ -60,6 +61,7 @@ __all__ = [
     "TwinStatsResponse",
     "TwinQualitySummaryResponse",
     "TwinWeeklyDigestResponse",
+    "TwinPerformanceSummaryResponse",
     "UpdateTwinRequest",
     # Messages & Drafts
     "MessageResponse",

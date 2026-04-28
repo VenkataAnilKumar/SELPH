@@ -280,6 +280,35 @@ class TestTwinEndpoints:
         response = client.get("/v1/twin/weekly-digest")
         assert response.status_code == 403
 
+    def test_get_twin_performance_summary(self, client, auth_headers, test_db, test_user_data):
+        user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        self._seed_quality_draft(test_db, user, status="approved", latency=3500)
+        self._seed_quality_draft(test_db, user, status="edited", latency=9200)
+        self._seed_quality_draft(test_db, user, status="rejected", latency=12000)
+
+        response = client.get("/v1/twin/performance-summary", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["twin_id"] == user.twin.id
+        assert data["drafts_measured_7d"] == 3
+        assert data["avg_pipeline_latency_ms_7d"] == 8233
+        assert data["p95_pipeline_latency_ms_7d"] >= 9200
+        assert data["drafts_over_10s_7d"] == 1
+        assert data["on_target_under_10s"] is False
+        assert isinstance(data["recommendation"], str)
+
+    def test_get_twin_performance_summary_no_data(self, client, auth_headers):
+        response = client.get("/v1/twin/performance-summary", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["drafts_measured_7d"] == 0
+        assert data["on_target_under_10s"] is True
+
+    def test_get_twin_performance_summary_unauthorized(self, client):
+        response = client.get("/v1/twin/performance-summary")
+        assert response.status_code == 403
+
 
 class TestMessageEndpoints:
     """Test message endpoints"""
