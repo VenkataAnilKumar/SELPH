@@ -3,7 +3,7 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
-email-validator==2.1.0
+email-validator==2.3.0
 
 # Database
 sqlalchemy==2.0.24
@@ -19,12 +19,12 @@ flower==2.0.1
 # LLM & AI
 litellm==1.32.1
 langchain==0.1.8
-langchain-community==0.0.20
+langchain-community==0.0.21
 langgraph==0.0.29
-anthropic==0.7.12
+anthropic==0.7.8
 
 # Auth & Security
-pyjwt==2.8.1
+pyjwt==2.8.0
 python-jose==3.3.0
 passlib==1.7.4
 bcrypt==4.1.2
