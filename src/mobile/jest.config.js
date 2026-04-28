@@ -8,7 +8,7 @@ module.exports = {
   // Module path mapping
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@selph/shared$': '<rootDir>/../shared/src/index.ts',
+    '^@selph/shared$': '<rootDir>/../shared/index.ts',
   },
 
   // Test file patterns
