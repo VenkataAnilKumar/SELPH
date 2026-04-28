@@ -48,6 +48,13 @@ class Draft(BaseModel):
     voice_provider = Column(String, nullable=True)
     voice_model_id = Column(String, nullable=True)
     voice_error = Column(Text, nullable=True)
+
+    # Avatar synthesis (Phase 7)
+    avatar_status = Column(String, default="not_requested", nullable=False)
+    avatar_video_url = Column(Text, nullable=True)
+    avatar_provider = Column(String, nullable=True)
+    avatar_model_id = Column(String, nullable=True)
+    avatar_error = Column(Text, nullable=True)
     
     # Status
     status = Column(String, default="pending_approval", nullable=False)  # pending_approval, approved, edited, rejected, sent

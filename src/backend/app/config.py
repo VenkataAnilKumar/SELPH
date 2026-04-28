@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     voice_provider: str = "mock"  # mock | elevenlabs
     elevenlabs_api_key: str = ""
     voice_default_model_id: str = ""
+
+    # Avatar Clone (Phase 7)
+    avatar_provider: str = "mock"  # mock | heygen
+    heygen_api_key: str = ""
+    avatar_default_model_id: str = ""
     
     # Logging
     log_level: str = "INFO"
