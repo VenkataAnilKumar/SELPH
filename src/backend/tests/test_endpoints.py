@@ -4,6 +4,7 @@ Integration tests for backend API endpoints
 
 import pytest
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.models import AuditLog, Draft
@@ -1053,3 +1054,25 @@ class TestHealthEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] in ["healthy", "ok"]
+
+    def test_readiness_check_healthy(self, client):
+        response = client.get("/ready")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ready"
+        assert data["checks"]["database"]["ok"] is True
+        assert data["checks"]["jwt_secret"]["ok"] is True
+
+    @patch("app.routers.health.get_settings")
+    def test_readiness_check_detects_insecure_production_jwt(self, mock_get_settings, client):
+        mock_get_settings.return_value = SimpleNamespace(
+            environment="production",
+            enforce_production_jwt_secret=True,
+            jwt_secret_key="dev-secret-key-change-in-production",
+        )
+
+        response = client.get("/ready")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "not_ready"
+        assert data["checks"]["jwt_secret"]["ok"] is False
