@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
     print("🚀 SELPH Backend Starting...")
     print(f"   Environment: {settings.environment}")
     print(f"   API Version: {settings.api_v1_str}")
+
+    if settings.environment.lower() == "production" and settings.enforce_production_jwt_secret:
+        # Block unsafe default/weak JWT secrets in production.
+        if settings.jwt_secret_key == "dev-secret-key-change-in-production" or len(settings.jwt_secret_key) < 32:
+            raise RuntimeError("Insecure JWT secret for production. Set JWT_SECRET_KEY to a strong 32+ char value.")
     
     yield
     

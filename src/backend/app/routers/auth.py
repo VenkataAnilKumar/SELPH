@@ -3,20 +3,49 @@ Authentication endpoints
 /v1/auth/*
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+import time
+from collections import defaultdict, deque
+
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.middleware.auth import get_current_user
+from app.config import get_settings
 from app.schemas import SignupRequest, LoginRequest, TokenResponse, AuthResponse, UserResponse, PushTokenRequest, PushTokenResponse
 from app.services import AuthService
 from app.models import User
 
 router = APIRouter(tags=["auth"])
+_auth_requests: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _enforce_auth_rate_limit(route_name: str, client_ip: str) -> None:
+    settings = get_settings()
+    if settings.environment.lower() != "production":
+        return
+
+    limit = max(1, settings.auth_rate_limit_per_minute)
+    now = time.time()
+    window_start = now - 60
+    bucket_key = f"{route_name}:{client_ip}"
+    bucket = _auth_requests[bucket_key]
+
+    while bucket and bucket[0] < window_start:
+        bucket.popleft()
+
+    if len(bucket) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many authentication attempts. Please wait and try again.",
+        )
+
+    bucket.append(now)
 
 
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     request: SignupRequest,
+    client_request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -24,6 +53,8 @@ async def signup(
     
     Returns: User data and JWT tokens (access + refresh)
     """
+    _enforce_auth_rate_limit("signup", getattr(client_request.client, "host", "unknown"))
+
     try:
         user = AuthService.signup(db, request)
     except ValueError as e:
@@ -48,6 +79,7 @@ async def signup(
 @router.post("/login", response_model=AuthResponse)
 async def login(
     request: LoginRequest,
+    client_request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -55,6 +87,8 @@ async def login(
 
     Returns: User data and JWT tokens (access + refresh)
     """
+    _enforce_auth_rate_limit("login", getattr(client_request.client, "host", "unknown"))
+
     try:
         user = AuthService.login(db, request)
     except ValueError as e:
