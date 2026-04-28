@@ -18,6 +18,10 @@ from app.schemas.identity import (
     IdentityProfileResponse,
     UpdateIdentityRequest,
     IdentityConfidenceResponse,
+    VoiceConsentRequest,
+    VoiceConsentResponse,
+    VoiceEnrollmentRequest,
+    VoiceEnrollmentResponse,
     RESPONSE_LENGTH_MAP,
 )
 from typing import List
@@ -254,3 +258,114 @@ async def get_identity_confidence(
     """
     result = IdentityService.get_confidence_score(db, current_user.id)
     return IdentityConfidenceResponse(**result)
+
+
+# ── Voice Clone (Phase 6 PR B) ──────────────────────────────────────────────
+
+@router.get("/voice/consent", response_model=VoiceConsentResponse)
+async def get_voice_consent(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current voice clone consent state."""
+    consent = IdentityService.get_voice_consent(db, current_user.id)
+    if not consent:
+        return VoiceConsentResponse(
+            consent_type="voice_clone",
+            granted=False,
+            granted_at=None,
+            expires_at=None,
+        )
+
+    return VoiceConsentResponse(
+        consent_type=consent.consent_type,
+        granted=consent.granted,
+        granted_at=consent.granted_at.isoformat() if consent.granted_at else None,
+        expires_at=consent.expires_at.isoformat() if consent.expires_at else None,
+    )
+
+
+@router.post("/voice/consent", response_model=VoiceConsentResponse)
+async def set_voice_consent(
+    request: VoiceConsentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Grant or revoke consent for voice cloning."""
+    consent = IdentityService.set_voice_consent(db, current_user.id, request.granted)
+    if not request.granted:
+        # Revoke enrolled voice data when consent is revoked.
+        IdentityService.clear_voice_profile(db, current_user.id)
+
+    return VoiceConsentResponse(
+        consent_type=consent.consent_type,
+        granted=consent.granted,
+        granted_at=consent.granted_at.isoformat() if consent.granted_at else None,
+        expires_at=consent.expires_at.isoformat() if consent.expires_at else None,
+    )
+
+
+@router.get("/voice/profile", response_model=VoiceEnrollmentResponse)
+async def get_voice_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current voice enrollment metadata and consent state."""
+    profile = IdentityService.get_identity_profile(db, current_user.id)
+    consent_granted = IdentityService.is_voice_consent_granted(db, current_user.id)
+    enrolled = bool(profile and profile.voice_model_id)
+
+    return VoiceEnrollmentResponse(
+        enrolled=enrolled,
+        voice_provider=profile.voice_provider if profile else None,
+        voice_model_id=profile.voice_model_id if profile else None,
+        voice_sample_url=profile.voice_sample_url if profile else None,
+        consent_granted=consent_granted,
+    )
+
+
+@router.post("/voice/enroll", response_model=VoiceEnrollmentResponse)
+async def enroll_voice_profile(
+    request: VoiceEnrollmentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Enroll or update a voice profile after explicit voice clone consent."""
+    if not IdentityService.is_voice_consent_granted(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Voice clone consent is required before enrollment",
+        )
+
+    profile = IdentityService.enroll_voice_profile(
+        db,
+        user_id=current_user.id,
+        voice_provider=request.voice_provider,
+        voice_model_id=request.voice_model_id,
+        voice_sample_url=request.voice_sample_url,
+    )
+
+    return VoiceEnrollmentResponse(
+        enrolled=bool(profile.voice_model_id),
+        voice_provider=profile.voice_provider,
+        voice_model_id=profile.voice_model_id,
+        voice_sample_url=profile.voice_sample_url,
+        consent_granted=True,
+    )
+
+
+@router.delete("/voice/profile", response_model=VoiceEnrollmentResponse)
+async def clear_voice_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Clear voice enrollment metadata while leaving consent unchanged."""
+    profile = IdentityService.clear_voice_profile(db, current_user.id)
+    consent_granted = IdentityService.is_voice_consent_granted(db, current_user.id)
+    return VoiceEnrollmentResponse(
+        enrolled=False,
+        voice_provider=profile.voice_provider,
+        voice_model_id=profile.voice_model_id,
+        voice_sample_url=profile.voice_sample_url,
+        consent_granted=consent_granted,
+    )
