@@ -47,7 +47,7 @@ def process_incoming_message(
     """
     try:
         # Create database session
-        engine = create_engine(settings.DATABASE_URL)
+        engine = create_engine(settings.database_url)
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
         

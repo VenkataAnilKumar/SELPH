@@ -91,6 +91,27 @@ class ApiClient {
   async health() {
     return this.client.get('/health')
   }
+
+  // Generic HTTP methods (for direct use in pages/contexts)
+  async get(url: string, config?: any) {
+    return this.client.get(url, config)
+  }
+
+  async post(url: string, data?: any, config?: any) {
+    return this.client.post(url, data, config)
+  }
+
+  async put(url: string, data?: any, config?: any) {
+    return this.client.put(url, data, config)
+  }
+
+  async delete(url: string, config?: any) {
+    return this.client.delete(url, config)
+  }
+
+  get defaults() {
+    return this.client.defaults
+  }
 }
 
-export const api = new ApiClient()
+export const apiClient = new ApiClient()

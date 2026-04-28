@@ -3,9 +3,6 @@ Content moderation and safety service
 Phase 0: Safety baseline checks
 """
 
-from typing import tuple
-
-
 class ModerationService:
     """Service for content moderation and safety checks"""
     

@@ -19,7 +19,7 @@ from app.database import Base, get_db
 from app.config import settings
 from app.models.user import User
 from app.models.twin import Twin
-from app.models.identity import IdentityProfile
+from app.models.identity_profile import IdentityProfile
 
 
 @pytest.fixture(scope="session")

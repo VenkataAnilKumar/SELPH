@@ -35,7 +35,7 @@ async def signup(
     access_token, refresh_token, expires_in = AuthService.generate_tokens(user.id)
     
     return {
-        "user": UserResponse.from_attributes(user),
+        "user": UserResponse.model_validate(user),
         "tokens": {
             "access_token": access_token,
             "refresh_token": refresh_token,
@@ -52,7 +52,7 @@ async def login(
 ):
     """
     Log in user with email and password
-    
+
     Returns: User data and JWT tokens (access + refresh)
     """
     try:
@@ -62,11 +62,11 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         )
-    
+
     access_token, refresh_token, expires_in = AuthService.generate_tokens(user.id)
-    
+
     return {
-        "user": UserResponse.from_attributes(user),
+        "user": UserResponse.model_validate(user),
         "tokens": {
             "access_token": access_token,
             "refresh_token": refresh_token,
@@ -132,5 +132,5 @@ async def get_current_user_info(
     
     Returns: User data
     """
-    return UserResponse.from_attributes(current_user)
+    return UserResponse.model_validate(current_user)
 

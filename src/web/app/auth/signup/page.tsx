@@ -14,10 +14,12 @@ import {
 export default function SignupPage() {
   const { signup, error, clearError } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [validationErrors, setValidationErrors] = useState<{
+    name?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
@@ -31,6 +33,8 @@ export default function SignupPage() {
 
     // Validation
     const newErrors: typeof validationErrors = {};
+
+    if (!name || name.trim().length < 1) newErrors.name = "Name is required";
 
     if (!email) newErrors.email = "Email is required";
     else if (!validateEmail(email))
@@ -50,7 +54,7 @@ export default function SignupPage() {
     }
 
     try {
-      await signup(email, password);
+      await signup(email, password, name.trim());
     } catch (err) {
       // Error is handled by auth context
       setLoading(false);
@@ -72,6 +76,18 @@ export default function SignupPage() {
         {/* Form */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <FormError message={error} />}
+
+          <InputField
+            id="name"
+            label="Full Name"
+            type="text"
+            placeholder="Your full name"
+            value={name}
+            onChange={setName}
+            error={validationErrors.name}
+            disabled={loading}
+            required
+          />
 
           <InputField
             id="email"

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     default_llm_provider: str = "anthropic"
-    default_llm_model: str = "claude-3-5-sonnet-20241022"
+    default_llm_model: str = "claude-sonnet-4-6"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
@@ -74,13 +74,13 @@ class Settings(BaseSettings):
     enable_metrics: bool = True
     
     # Feature Flags
-    feature_twin_briefing: bool = True
-    feature_vip_override: bool = True
-    feature_batch_approval: bool = True
+    feature_twin_briefing: bool = False
+    feature_vip_override: bool = False
+    feature_batch_approval: bool = False
     feature_voice_clone: bool = False
     feature_avatar_clone: bool = False
-    feature_instagram: bool = True
-    feature_gmail: bool = True
+    feature_instagram: bool = False
+    feature_gmail: bool = False
     feature_twitter: bool = False
     feature_whatsapp: bool = False
     
@@ -105,3 +105,7 @@ def get_settings() -> Settings:
     Get cached settings instance
     """
     return Settings()
+
+
+# Backward-compatible module-level settings import target.
+settings = get_settings()

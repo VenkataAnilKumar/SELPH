@@ -44,9 +44,9 @@ def create_access_token(
     encoded_jwt = jwt.encode(
         to_encode,
         settings.jwt_secret_key,
-        algorithm="HS256",
+        algorithm=settings.jwt_algorithm,
     )
-    
+
     expires_in = int(expires_delta.total_seconds()) if expires_delta else 86400
     return encoded_jwt, expires_in
 
@@ -57,20 +57,20 @@ def create_refresh_token(
 ) -> str:
     """Create a JWT refresh token"""
     to_encode = data.copy()
-    
+
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(days=7)
-    
+
     to_encode.update({"exp": expire})
-    
+
     encoded_jwt = jwt.encode(
         to_encode,
         settings.jwt_secret_key,
-        algorithm="HS256",
+        algorithm=settings.jwt_algorithm,
     )
-    
+
     return encoded_jwt
 
 
@@ -83,7 +83,7 @@ def verify_token(token: str) -> Optional[dict]:
         payload = jwt.decode(
             token,
             settings.jwt_secret_key,
-            algorithms=["HS256"],
+            algorithms=[settings.jwt_algorithm],
         )
         return payload
     except jwt.ExpiredSignatureError:

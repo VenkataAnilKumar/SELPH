@@ -32,7 +32,7 @@ export default function DashboardScreen() {
   useEffect(() => {
     const fetchTwin = async () => {
       try {
-        const response = await apiClient.get('/v1/twin/me')
+        const response = await apiClient.get('/twin/me')
         setTwin(response.data)
       } catch (err: any) {
         setError(

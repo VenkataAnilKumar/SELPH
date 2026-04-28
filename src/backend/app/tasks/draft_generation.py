@@ -37,10 +37,10 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
     """
     try:
         # Create database session
-        engine = create_engine(settings.DATABASE_URL)
+        engine = create_engine(settings.database_url)
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
-        
+
         try:
             # 1. Fetch message
             message = db.query(Message).filter(Message.id == message_id).first()
