@@ -14,28 +14,111 @@ interface Twin {
   created_at: string;
 }
 
+interface TwinStats {
+  total_messages: number;
+  pending_drafts: number;
+  processed_drafts: number;
+  total_estimated_tokens: number;
+  total_estimated_cost_usd: number;
+  fallback_rate: number;
+  generation_source_breakdown: Record<string, number>;
+  model_breakdown: Record<string, number>;
+  fallback_reason_breakdown: Record<string, number>;
+}
+
+interface Draft {
+  id: string;
+  content: string;
+  status: string;
+  confidence_score: number;
+  confidence_label: string;
+  confidence_reasoning?: string | null;
+  generation_source?: string | null;
+  llm_model?: string | null;
+  fallback_reason?: string | null;
+  estimated_total_tokens?: number | null;
+  estimated_cost_usd?: number | null;
+  created_at: string;
+}
+
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [twin, setTwin] = useState<Twin | null>(null);
+  const [stats, setStats] = useState<TwinStats | null>(null);
+  const [pendingDrafts, setPendingDrafts] = useState<Draft[]>([]);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [editDraftId, setEditDraftId] = useState<string | null>(null);
+  const [editedContent, setEditedContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchTwin = async () => {
+    const fetchDashboard = async () => {
       try {
-        const response = await apiClient.get("/twin/me");
-        setTwin(response.data);
+        const [twinResponse, statsResponse, draftsResponse] = await Promise.all([
+          apiClient.get("/twin/me"),
+          apiClient.get("/twin/stats"),
+          apiClient.get("/drafts/pending"),
+        ]);
+
+        setTwin(twinResponse.data);
+        setStats(statsResponse.data);
+        setPendingDrafts(draftsResponse.data);
+        setError(null);
       } catch (err: any) {
         setError(
-          err.response?.data?.detail || "Failed to load twin profile"
+          err.response?.data?.detail || "Failed to load dashboard"
         );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTwin();
+    fetchDashboard();
   }, []);
+
+  const refreshDashboard = async () => {
+    const [statsResponse, draftsResponse] = await Promise.all([
+      apiClient.get("/twin/stats"),
+      apiClient.get("/drafts/pending"),
+    ]);
+
+    setStats(statsResponse.data);
+    setPendingDrafts(draftsResponse.data);
+  };
+
+  const handleDraftAction = async (
+    draftId: string,
+    action: "approve" | "reject" | "edit" | "skip",
+    editedValue?: string
+  ) => {
+    setActionMessage(null);
+    setActionError(null);
+    setActiveDraftId(draftId);
+
+    try {
+      await apiClient.approveDraft(draftId, action, editedValue);
+      await refreshDashboard();
+      setActionMessage(
+        action === "edit"
+          ? "Draft updated and approved."
+          : `Draft ${action}d successfully.`
+      );
+
+      if (action === "edit") {
+        setEditDraftId(null);
+        setEditedContent("");
+      }
+    } catch (err: any) {
+      setActionError(
+        err.response?.data?.detail || `Failed to ${action} draft`
+      );
+    } finally {
+      setActiveDraftId(null);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -85,6 +168,18 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {actionMessage && (
+            <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+              {actionMessage}
+            </div>
+          )}
+
+          {actionError && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+              {actionError}
+            </div>
+          )}
+
           {twin && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Twin Profile Card */}
@@ -126,25 +221,252 @@ export default function DashboardPage() {
               {/* Quick Actions */}
               <div className="bg-white rounded-lg shadow p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Quick Actions
+                  Approval Loop
                 </h2>
-                <div className="space-y-3">
-                  <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                    View Messages
-                  </button>
-                  <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
-                    Approve Drafts
-                  </button>
-                  <button className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
-                    Update Twin Profile
-                  </button>
-                  <button className="w-full px-4 py-3 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 font-medium">
-                    View Settings
-                  </button>
-                </div>
+                {stats ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <p className="text-sm text-gray-600">Pending Drafts</p>
+                      <p className="mt-2 text-3xl font-bold text-gray-900">
+                        {stats.pending_drafts}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <p className="text-sm text-gray-600">Processed Drafts</p>
+                      <p className="mt-2 text-3xl font-bold text-gray-900">
+                        {stats.processed_drafts}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <p className="text-sm text-gray-600">Messages Seen</p>
+                      <p className="mt-2 text-3xl font-bold text-gray-900">
+                        {stats.total_messages}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <p className="text-sm text-gray-600">Fallback Rate</p>
+                      <p className="mt-2 text-3xl font-bold text-gray-900">
+                        {(stats.fallback_rate * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">No stats available yet.</p>
+                )}
               </div>
             </div>
           )}
+
+          <div className="mt-12 grid grid-cols-1 gap-8 xl:grid-cols-[2fr_1fr]">
+            <section className="rounded-lg bg-white p-8 shadow">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Pending Drafts
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Review generated replies before SELPH sends anything.
+                  </p>
+                </div>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+                  {pendingDrafts.length} awaiting review
+                </span>
+              </div>
+
+              {pendingDrafts.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-600">
+                  No drafts are waiting for approval.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {pendingDrafts.map((draft) => {
+                    const isEditing = editDraftId === draft.id;
+                    const isSubmitting = activeDraftId === draft.id;
+
+                    return (
+                      <article
+                        key={draft.id}
+                        className="rounded-xl border border-gray-200 p-6"
+                      >
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                            {draft.confidence_label} confidence
+                          </span>
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                            {draft.generation_source || "unknown source"}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {draft.llm_model || "No model recorded"}
+                          </span>
+                        </div>
+
+                        <p className="mt-4 whitespace-pre-wrap text-gray-900">
+                          {draft.content}
+                        </p>
+
+                        <div className="mt-4 grid gap-3 text-sm text-gray-600 sm:grid-cols-2">
+                          <p>
+                            Confidence score: {draft.confidence_score.toFixed(2)}
+                          </p>
+                          <p>
+                            Estimated tokens: {draft.estimated_total_tokens ?? 0}
+                          </p>
+                          <p>
+                            Estimated cost: ${Number(draft.estimated_cost_usd ?? 0).toFixed(4)}
+                          </p>
+                          <p>
+                            Fallback reason: {draft.fallback_reason || "None"}
+                          </p>
+                        </div>
+
+                        {draft.confidence_reasoning && (
+                          <p className="mt-3 text-sm text-gray-600">
+                            {draft.confidence_reasoning}
+                          </p>
+                        )}
+
+                        {isEditing && (
+                          <div className="mt-4 rounded-lg bg-gray-50 p-4">
+                            <label className="mb-2 block text-sm font-medium text-gray-900">
+                              Edited response
+                            </label>
+                            <textarea
+                              value={editedContent}
+                              onChange={(event) => setEditedContent(event.target.value)}
+                              className="min-h-32 w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-900 outline-none focus:border-blue-500"
+                            />
+                            <div className="mt-3 flex gap-3">
+                              <button
+                                onClick={() =>
+                                  handleDraftAction(
+                                    draft.id,
+                                    "edit",
+                                    editedContent
+                                  )
+                                }
+                                disabled={isSubmitting || editedContent.trim().length === 0}
+                                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                              >
+                                Save Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditDraftId(null);
+                                  setEditedContent("");
+                                }}
+                                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-5 flex flex-wrap gap-3">
+                          <button
+                            onClick={() => handleDraftAction(draft.id, "approve")}
+                            disabled={isSubmitting}
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditDraftId(draft.id);
+                              setEditedContent(draft.content);
+                            }}
+                            disabled={isSubmitting}
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDraftAction(draft.id, "reject")}
+                            disabled={isSubmitting}
+                            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleDraftAction(draft.id, "skip")}
+                            disabled={isSubmitting}
+                            className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-300 disabled:cursor-not-allowed disabled:bg-gray-100"
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <aside className="rounded-lg bg-white p-8 shadow">
+              <h2 className="text-2xl font-bold text-gray-900">Model Signals</h2>
+              {stats ? (
+                <div className="mt-6 space-y-6 text-sm text-gray-700">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      Generation Sources
+                    </h3>
+                    <div className="mt-3 space-y-2">
+                      {Object.entries(stats.generation_source_breakdown).map(
+                        ([source, count]) => (
+                          <div key={source} className="flex justify-between">
+                            <span>{source}</span>
+                            <span className="font-medium text-gray-900">{count}</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Models</h3>
+                    <div className="mt-3 space-y-2">
+                      {Object.entries(stats.model_breakdown).map(([model, count]) => (
+                        <div key={model} className="flex justify-between">
+                          <span>{model}</span>
+                          <span className="font-medium text-gray-900">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Fallback Reasons</h3>
+                    <div className="mt-3 space-y-2">
+                      {Object.keys(stats.fallback_reason_breakdown).length === 0 ? (
+                        <p className="text-gray-500">No fallbacks recorded.</p>
+                      ) : (
+                        Object.entries(stats.fallback_reason_breakdown).map(
+                          ([reason, count]) => (
+                            <div key={reason} className="flex justify-between">
+                              <span>{reason}</span>
+                              <span className="font-medium text-gray-900">{count}</span>
+                            </div>
+                          )
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-gray-50 p-4">
+                    <p className="text-sm text-gray-600">Estimated spend</p>
+                    <p className="mt-2 text-2xl font-bold text-gray-900">
+                      ${stats.total_estimated_cost_usd.toFixed(4)}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {stats.total_estimated_tokens} tokens processed so far
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-600">Stats will appear after draft activity.</p>
+              )}
+            </aside>
+          </div>
 
           {/* Getting Started Guide */}
           <div className="mt-12 bg-white rounded-lg shadow p-8">
