@@ -31,6 +31,12 @@ from app.schemas.identity import (
     IdentityConfidenceResponse,
 )
 
+from app.schemas.channels import (
+    ChannelConnectRequest,
+    ChannelConnectResponse,
+    ConnectedChannelResponse,
+)
+
 __all__ = [
     # Auth
     "SignupRequest",
@@ -56,4 +62,8 @@ __all__ = [
     "IdentityProfileResponse",
     "UpdateIdentityRequest",
     "IdentityConfidenceResponse",
+    # Channels
+    "ChannelConnectRequest",
+    "ChannelConnectResponse",
+    "ConnectedChannelResponse",
 ]

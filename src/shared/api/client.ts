@@ -50,6 +50,10 @@ class ApiClient {
     return this.client.post('/twin/pause')
   }
 
+  async resumeTwin() {
+    return this.client.post('/twin/resume')
+  }
+
   async getTwinStats() {
     return this.client.get('/twin/stats')
   }
@@ -71,12 +75,18 @@ class ApiClient {
   }
 
   // Channels endpoints
-  async connectInstagram() {
-    window.location.href = `${API_URL}/v1/channels/instagram/connect`
+  async connectInstagram(credentialValue?: string, scope?: string) {
+    return this.client.post('/channels/instagram/connect', {
+      credential_value: credentialValue,
+      scope,
+    })
   }
 
-  async connectGmail() {
-    window.location.href = `${API_URL}/v1/channels/gmail/connect`
+  async connectGmail(credentialValue?: string, scope?: string) {
+    return this.client.post('/channels/gmail/connect', {
+      credential_value: credentialValue,
+      scope,
+    })
   }
 
   async getConnectedChannels() {

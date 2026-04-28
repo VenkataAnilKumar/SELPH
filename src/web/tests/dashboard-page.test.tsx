@@ -15,6 +15,8 @@ jest.mock('@/components/protected-route', () => ({
 jest.mock('@selph/shared', () => ({
   apiClient: {
     get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
     approveDraft: jest.fn(),
   },
 }))
@@ -74,11 +76,30 @@ describe('Dashboard page (web)', () => {
     ],
   }
 
+  const identityResponse = {
+    data: {
+      vocabulary_description: 'focused, clear, supportive',
+      communication_style: 'friendly',
+      topics_known: ['productivity'],
+      topics_avoided: ['politics'],
+      profile_complete: true,
+    },
+  }
+
+  const channelsResponse = {
+    data: [
+      { channel: 'instagram', connected: false, scope: null, updated_at: '2026-01-01T00:00:00Z' },
+      { channel: 'gmail', connected: false, scope: null, updated_at: '2026-01-01T00:00:00Z' },
+    ],
+  }
+
   const primeDashboardFetches = () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(twinResponse)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce(pendingDraftsResponse)
+      .mockResolvedValueOnce(identityResponse)
+      .mockResolvedValueOnce(channelsResponse)
   }
 
   beforeEach(() => {
@@ -150,6 +171,7 @@ describe('Dashboard page (web)', () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(channelsResponse)
 
     render(<DashboardPage />)
 
@@ -175,6 +197,7 @@ describe('Dashboard page (web)', () => {
     ;(apiClient.get as jest.Mock)
       .mockResolvedValueOnce(statsResponse)
       .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(channelsResponse)
 
     render(<DashboardPage />)
 
@@ -187,8 +210,8 @@ describe('Dashboard page (web)', () => {
     })
 
     await waitFor(() => {
-      // initial fetch: 3 calls (twin + stats + drafts); poll refresh: 2 calls (stats + drafts)
-      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(5)
+      // initial fetch: 5 calls (twin/stats/drafts/identity/channels); poll refresh: 3 calls
+      expect((apiClient.get as jest.Mock).mock.calls.length).toBe(8)
     })
 
     jest.useRealTimers()

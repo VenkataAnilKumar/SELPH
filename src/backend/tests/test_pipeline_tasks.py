@@ -2,6 +2,7 @@
 Integration tests for Phase 2 message -> draft pipeline tasks.
 """
 
+from unittest.mock import MagicMock, patch
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Draft, Message
@@ -17,9 +18,12 @@ def _bind_task_engine_to_test_db(monkeypatch, test_db):
 
 
 class TestDraftGenerationTaskPipeline:
-    def test_generate_draft_task_persists_draft_and_marks_message_ready(self, test_db, test_user, monkeypatch):
+    @patch("app.tasks.push_notifications.notify_draft_ready")
+    def test_generate_draft_task_persists_draft_and_marks_message_ready(self, mock_notify, test_db, test_user, monkeypatch):
         """Task should create a draft row and set message status to draft_ready."""
         _bind_task_engine_to_test_db(monkeypatch, test_db)
+        # Mock the delay() call to prevent broker connection
+        mock_notify.delay = MagicMock(return_value=None)
 
         message = MessageService.create_message(
             test_db,
@@ -55,9 +59,12 @@ class TestDraftGenerationTaskPipeline:
         finally:
             db.close()
 
-    def test_generate_draft_task_uses_avoided_topic_fallback(self, test_db, test_user, monkeypatch):
+    @patch("app.tasks.push_notifications.notify_draft_ready")
+    def test_generate_draft_task_uses_avoided_topic_fallback(self, mock_notify, test_db, test_user, monkeypatch):
         """Avoided topics should route task output through deterministic fallback guardrail."""
         _bind_task_engine_to_test_db(monkeypatch, test_db)
+        # Mock the delay() call to prevent broker connection
+        mock_notify.delay = MagicMock(return_value=None)
 
         IdentityService.add_avoided_topic(test_db, test_user.id, "politics")
 

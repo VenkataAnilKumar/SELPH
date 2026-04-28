@@ -494,6 +494,50 @@ class TestPushTokenEndpoints:
         assert response.status_code == 403
 
 
+class TestChannelEndpoints:
+    """Tests for channel credential management endpoints."""
+
+    def test_connect_and_list_channels(self, client, auth_headers):
+        connect_instagram = client.post(
+            "/v1/channels/instagram/connect",
+            headers=auth_headers,
+            json={},
+        )
+        connect_gmail = client.post(
+            "/v1/channels/gmail/connect",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert connect_instagram.status_code == 200
+        assert connect_gmail.status_code == 200
+
+        response = client.get("/v1/channels/connected", headers=auth_headers)
+        assert response.status_code == 200
+
+        channels = {item["channel"]: item for item in response.json()}
+        assert channels["instagram"]["connected"] is True
+        assert channels["gmail"]["connected"] is True
+
+    def test_disconnect_channel(self, client, auth_headers):
+        client.post(
+            "/v1/channels/instagram/connect",
+            headers=auth_headers,
+            json={},
+        )
+
+        response = client.post(
+            "/v1/channels/instagram/disconnect",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["connected"] is False
+
+    def test_connect_requires_auth(self, client):
+        response = client.post("/v1/channels/gmail/connect", json={})
+        assert response.status_code == 403
+
+
 class TestHealthEndpoint:
     """Test health check endpoint"""
 
