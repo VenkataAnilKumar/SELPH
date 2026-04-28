@@ -92,6 +92,11 @@ class DraftResponse(BaseModel):
     voice_provider: Optional[str]
     voice_model_id: Optional[str]
     voice_error: Optional[str]
+    avatar_status: Optional[str]
+    avatar_video_url: Optional[str]
+    avatar_provider: Optional[str]
+    avatar_model_id: Optional[str]
+    avatar_error: Optional[str]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -127,6 +132,33 @@ class DraftVoiceStatusResponse(BaseModel):
     voice_provider: Optional[str] = None
     voice_model_id: Optional[str] = None
     voice_error: Optional[str] = None
+
+
+class DraftAvatarGenerateRequest(BaseModel):
+    """Request payload to queue avatar generation for a draft."""
+
+    avatar_model_id: Optional[str] = None
+    voice_audio_url: Optional[str] = None
+
+
+class DraftAvatarGenerateResponse(BaseModel):
+    """Queue response for draft avatar generation."""
+
+    draft_id: str
+    queued: bool
+    avatar_status: str
+    task_id: Optional[str] = None
+
+
+class DraftAvatarStatusResponse(BaseModel):
+    """Avatar generation status for a draft."""
+
+    draft_id: str
+    avatar_status: str
+    avatar_video_url: Optional[str] = None
+    avatar_provider: Optional[str] = None
+    avatar_model_id: Optional[str] = None
+    avatar_error: Optional[str] = None
 
 
 

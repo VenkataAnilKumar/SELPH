@@ -16,9 +16,13 @@ from app.schemas import (
     DraftVoiceGenerateRequest,
     DraftVoiceGenerateResponse,
     DraftVoiceStatusResponse,
+    DraftAvatarGenerateRequest,
+    DraftAvatarGenerateResponse,
+    DraftAvatarStatusResponse,
 )
 from app.config import get_settings
 from app.tasks.voice_synthesis import synthesize_voice
+from app.tasks.avatar_generation import generate_avatar
 from typing import List
 
 router = APIRouter(tags=["drafts"])
@@ -236,5 +240,97 @@ async def get_draft_voice_status(
         voice_provider=draft.voice_provider,
         voice_model_id=draft.voice_model_id,
         voice_error=draft.voice_error,
+    )
+
+
+@router.post("/{draft_id}/avatar/generate", response_model=DraftAvatarGenerateResponse)
+async def generate_draft_avatar(
+    draft_id: str,
+    request: DraftAvatarGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Queue avatar generation for an approved/edited draft."""
+    settings = get_settings()
+    if not settings.feature_avatar_clone:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Avatar clone feature is disabled",
+        )
+
+    draft = DraftService.get_draft(db, draft_id)
+    if not draft:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+
+    if draft.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unauthorized: Draft belongs to different user",
+        )
+
+    if draft.status not in ("approved", "edited"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Draft must be approved or edited before avatar generation",
+        )
+
+    if not IdentityService.is_avatar_consent_granted(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Avatar clone consent is required before generation",
+        )
+
+    text = draft.edited_content or draft.content
+
+    updated = DraftService.set_avatar_status(
+        db,
+        draft_id=draft.id,
+        avatar_status="queued",
+        avatar_video_url=None,
+        avatar_provider=None,
+        avatar_model_id=request.avatar_model_id,
+        avatar_error=None,
+    )
+
+    task_result = generate_avatar.delay(
+        draft_id=draft.id,
+        user_id=current_user.id,
+        text=text,
+        avatar_style_id=request.avatar_model_id,
+        voice_audio_url=request.voice_audio_url,
+    )
+
+    return DraftAvatarGenerateResponse(
+        draft_id=draft.id,
+        queued=True,
+        avatar_status=updated.avatar_status,
+        task_id=str(task_result.id) if task_result else None,
+    )
+
+
+@router.get("/{draft_id}/avatar", response_model=DraftAvatarStatusResponse)
+async def get_draft_avatar_status(
+    draft_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get avatar generation status and delivery URL for a draft."""
+    draft = DraftService.get_draft(db, draft_id)
+    if not draft:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+
+    if draft.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unauthorized: Draft belongs to different user",
+        )
+
+    return DraftAvatarStatusResponse(
+        draft_id=draft.id,
+        avatar_status=draft.avatar_status,
+        avatar_video_url=draft.avatar_video_url,
+        avatar_provider=draft.avatar_provider,
+        avatar_model_id=draft.avatar_model_id,
+        avatar_error=draft.avatar_error,
     )
 

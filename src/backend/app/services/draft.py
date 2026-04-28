@@ -305,3 +305,28 @@ class DraftService:
         db.commit()
         db.refresh(draft)
         return draft
+
+    @staticmethod
+    def set_avatar_status(
+        db: Session,
+        draft_id: str,
+        avatar_status: str,
+        avatar_video_url: str = None,
+        avatar_provider: str = None,
+        avatar_model_id: str = None,
+        avatar_error: str = None,
+    ) -> Draft:
+        """Update avatar generation fields on a draft."""
+        draft = DraftService.get_draft(db, draft_id)
+        if not draft:
+            return None
+
+        draft.avatar_status = avatar_status
+        draft.avatar_video_url = avatar_video_url
+        draft.avatar_provider = avatar_provider
+        draft.avatar_model_id = avatar_model_id
+        draft.avatar_error = avatar_error
+
+        db.commit()
+        db.refresh(draft)
+        return draft

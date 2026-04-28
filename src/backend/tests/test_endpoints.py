@@ -580,6 +580,140 @@ class TestDraftEndpoints:
         assert data["voice_provider"] == "mock"
         assert data["voice_model_id"] == "voice-test-1"
 
+    @patch("app.routers.drafts.get_settings")
+    @patch("app.routers.drafts.generate_avatar")
+    def test_generate_avatar_queues_task_for_approved_draft(
+        self,
+        mock_generate_avatar,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Approved draft with consent should queue avatar generation task."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        # Grant avatar consent
+        client.post("/v1/identity/avatar/consent", headers=auth_headers, json={"granted": True})
+
+        mock_settings.return_value.feature_avatar_clone = True
+        mock_task = MagicMock()
+        mock_task.id = "task-avatar-123"
+        mock_generate_avatar.delay.return_value = mock_task
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/avatar/generate",
+            headers=auth_headers,
+            json={"avatar_model_id": "avatar-test-1"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["draft_id"] == draft.id
+        assert data["queued"] is True
+        assert data["avatar_status"] == "queued"
+        assert data["task_id"] == "task-avatar-123"
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_avatar_requires_consent(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Avatar generation should fail when consent is missing."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        mock_settings.return_value.feature_avatar_clone = True
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/avatar/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 409
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_avatar_requires_approved_or_edited_status(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Pending drafts cannot be queued for avatar generation."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+
+        client.post("/v1/identity/avatar/consent", headers=auth_headers, json={"granted": True})
+        mock_settings.return_value.feature_avatar_clone = True
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/avatar/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 409
+
+    @patch("app.routers.drafts.get_settings")
+    def test_generate_avatar_disabled_feature_returns_503(
+        self,
+        mock_settings,
+        client,
+        auth_headers,
+        test_db,
+        test_user_data,
+    ):
+        """Feature flag off should return service unavailable."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+        DraftService.approve_draft(test_db, draft.id, current_user.id)
+
+        client.post("/v1/identity/avatar/consent", headers=auth_headers, json={"granted": True})
+        mock_settings.return_value.feature_avatar_clone = False
+
+        response = client.post(
+            f"/v1/drafts/{draft.id}/avatar/generate",
+            headers=auth_headers,
+            json={},
+        )
+
+        assert response.status_code == 503
+
+    def test_get_draft_avatar_status(self, client, auth_headers, test_db, test_user_data):
+        """Avatar status endpoint should return persisted avatar metadata."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        draft = self._seed_draft(test_db, current_user)
+
+        DraftService.set_avatar_status(
+            test_db,
+            draft.id,
+            avatar_status="generated",
+            avatar_video_url="mock://avatar/test.mp4",
+            avatar_provider="mock",
+            avatar_model_id="avatar-test-1",
+            avatar_error=None,
+        )
+
+        response = client.get(f"/v1/drafts/{draft.id}/avatar", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["avatar_status"] == "generated"
+        assert data["avatar_video_url"] == "mock://avatar/test.mp4"
+        assert data["avatar_provider"] == "mock"
+        assert data["avatar_model_id"] == "avatar-test-1"
+
 
 class TestPushTokenEndpoints:
     """Tests for device push-token registration"""
