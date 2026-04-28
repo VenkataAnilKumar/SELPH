@@ -210,6 +210,9 @@ git push origin main
 5. Ensure CI passes (tests, lint, security)
 6. Get approval and merge
 
+For PR discipline and achievement-friendly workflow, see:
+- [GitHub Achievement Workflow](docs/06-implementation/GITHUB_ACHIEVEMENT_WORKFLOW.md)
+
 ---
 
 ## Safety & Compliance
