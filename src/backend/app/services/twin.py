@@ -52,7 +52,7 @@ class TwinService:
         total_messages = db.query(Message).filter(Message.user_id == user_id).count()
         processed_drafts = db.query(Draft).filter(
             Draft.user_id == user_id,
-            Draft.status.in_(["approved", "sent"])
+            Draft.status.in_(["approved", "edited", "sent"])
         ).count()
         pending_drafts = db.query(Draft).filter(
             Draft.user_id == user_id,
@@ -74,6 +74,25 @@ class TwinService:
         ).scalar() or 0.0
 
         fallback_rate = round((fallback_count / total_drafts), 4) if total_drafts > 0 else 0.0
+
+        generation_source_breakdown = {}
+        for source, count in db.query(Draft.generation_source, func.count(Draft.id)).filter(
+            Draft.user_id == user_id,
+        ).group_by(Draft.generation_source).all():
+            generation_source_breakdown[source or "unknown"] = count
+
+        model_breakdown = {}
+        for model, count in db.query(Draft.llm_model, func.count(Draft.id)).filter(
+            Draft.user_id == user_id,
+        ).group_by(Draft.llm_model).all():
+            model_breakdown[model or "unknown"] = count
+
+        fallback_reason_breakdown = {}
+        for reason, count in db.query(Draft.fallback_reason, func.count(Draft.id)).filter(
+            Draft.user_id == user_id,
+            Draft.fallback_reason.is_not(None),
+        ).group_by(Draft.fallback_reason).all():
+            fallback_reason_breakdown[reason] = count
         
         return {
             "twin_id": twin.id,
@@ -86,6 +105,9 @@ class TwinService:
             "total_estimated_tokens": int(total_tokens),
             "total_estimated_cost_usd": float(round(total_cost, 8)),
             "fallback_rate": fallback_rate,
+            "generation_source_breakdown": generation_source_breakdown,
+            "model_breakdown": model_breakdown,
+            "fallback_reason_breakdown": fallback_reason_breakdown,
         }
     
     @staticmethod
