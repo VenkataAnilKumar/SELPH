@@ -59,7 +59,7 @@ jobs:
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET_KEY: test-secret-key
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: test-anthropic-key
         run: |
           cd src/backend
           pytest tests/ -v --cov=app --cov-report=xml
