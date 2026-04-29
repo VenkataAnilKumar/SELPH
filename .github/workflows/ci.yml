@@ -94,8 +94,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run migration + Phase 10 smoke
-        working-directory: src/backend
+        working-directory: .
         env:
           DATABASE_URL: postgresql://selph:selph_dev_password@127.0.0.1:5432/selph
           ENVIRONMENT: development
-        run: python scripts/migrate_and_smoke.py
+        run: npm run smoke:backend:migrate
