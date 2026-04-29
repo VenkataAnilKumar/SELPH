@@ -185,7 +185,7 @@ Added:
 
 ### Modified (2 files)
 - `src/mobile/package.json` - Added expo-secure-store and shared package
-- `docs/06-implementation/MOBILE_AUTH_SETUP.md` - Complete documentation
+- `docs/06-implementation/archive/completed/MOBILE_AUTH_SETUP.md` - Complete documentation
 
 **Total New Lines**: ~948 lines of code + documentation
 

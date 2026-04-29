@@ -455,7 +455,7 @@ These are intentional Phase 0 limitations and will be addressed in Phase 1+.
 ## Contact & Support
 
 For Phase 0 completion details, see:
-- `docs/06-implementation/TASK_15_TEST_SUITE_COMPLETE.md`
+- `docs/06-implementation/archive/completed/TASK_15_TEST_SUITE_COMPLETE.md`
 - `docs/06-implementation/IMPLEMENTATION_PLAN.md`
 - `docs/05-technical/SELPH_System-Architecture.md`
 

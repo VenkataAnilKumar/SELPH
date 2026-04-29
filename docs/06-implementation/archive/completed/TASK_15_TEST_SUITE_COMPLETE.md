@@ -303,7 +303,7 @@ npm test -- --coverage            # Coverage report
 - Total: ~300 lines
 
 ### Documentation (1 file)
-- `docs/06-implementation/TEST_SUITE_DOCUMENTATION.md` - Complete guide (600 lines)
+- `docs/06-implementation/archive/completed/TEST_SUITE_DOCUMENTATION.md` - Complete guide (600 lines)
 
 **Grand Total**: ~2,690 lines of test code and documentation
 
