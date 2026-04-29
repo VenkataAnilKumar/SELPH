@@ -5,6 +5,7 @@ Health check endpoints
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from datetime import datetime, UTC
+from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -36,7 +37,7 @@ async def readiness_check(db: Session = Depends(get_db)):
     Readiness check endpoint (database connectivity, dependencies, etc.)
     """
     settings = get_settings()
-    checks = {}
+    checks: dict[str, dict[str, Any]] = {}
 
     # Database dependency probe.
     try:
@@ -109,7 +110,7 @@ async def readiness_check(db: Session = Depends(get_db)):
     if avatar_provider_reason:
         checks["feature_avatar_clone"]["reason"] = avatar_provider_reason
 
-    is_ready = all(item["ok"] for item in checks.values())
+    is_ready = all(bool(item.get("ok")) for item in checks.values())
     payload = {
         "status": "ready" if is_ready else "not_ready",
         "timestamp": datetime.now(UTC).isoformat(),
