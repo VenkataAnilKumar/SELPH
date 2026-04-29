@@ -32,6 +32,8 @@ from app.schemas.twin import (
     BatchClusterResponse,
     BatchClusterListResponse,
     BatchTemplateApprovalRequest,
+    BatchSendResponse,
+    BatchSendListResponse,
 )
 
 from app.schemas.identity import (
@@ -81,6 +83,8 @@ __all__ = [
     "BatchClusterResponse",
     "BatchClusterListResponse",
     "BatchTemplateApprovalRequest",
+    "BatchSendResponse",
+    "BatchSendListResponse",
     # Identity
     "OnboardingRequest",
     "OnboardingResponse",

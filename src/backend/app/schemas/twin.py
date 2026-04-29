@@ -240,4 +240,27 @@ class BatchTemplateApprovalRequest(BaseModel):
     template_approved: Optional[str] = None
 
 
+class BatchSendResponse(BaseModel):
+    """Per-recipient personalized batch send row."""
+
+    id: str
+    cluster_id: str
+    message_id: str
+    sender_id: str
+    personalized_text: str
+    status: str
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BatchSendListResponse(BaseModel):
+    """List response for batch send rows."""
+
+    total: int
+    items: list[BatchSendResponse]
+
+
 

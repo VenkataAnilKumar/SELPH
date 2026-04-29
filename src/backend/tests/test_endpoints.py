@@ -1058,6 +1058,181 @@ class TestReferralEndpoints:
         )
         assert response.status_code == 400
 
+
+class TestBatchPersonalizationRender:
+    """Test batch personalization render pipeline — placeholder substitution and /sends endpoint."""
+
+    @staticmethod
+    def _get_authenticated_user(test_db, test_user_data):
+        return test_db.query(User).filter(User.email == test_user_data["email"]).first()
+
+    @staticmethod
+    def _seed_draft(test_db, test_user, **overrides):
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            overrides.pop("channel", "instagram_dm"),
+            overrides.pop("sender_id", "render-seed"),
+            overrides.pop("sender_name", "Alice Tester"),
+            overrides.pop("content", "What equipment do you use for filming?"),
+            {},
+        )
+        return DraftService.create_draft(
+            test_db,
+            message.id,
+            test_user.id,
+            test_user.twin.id,
+            overrides.pop("draft_content", "Here is what I use for filming."),
+            confidence_score=0.85,
+            confidence_label="High",
+            confidence_reasoning="render test",
+            moderation_passed=True,
+            moderation_flags=[],
+            generation_source="llm",
+            llm_model="claude-sonnet-4-6",
+            llm_calls=1,
+            parse_retry_count=0,
+            llm_latency_ms=200,
+            pipeline_latency_ms=300,
+            estimated_total_tokens=100,
+            estimated_cost_usd=0.0006,
+        )
+
+    def _seed_cluster(self, client, auth_headers, test_db, test_user):
+        """Seed two similar drafts and cluster them; return cluster_id.
+
+        Both messages share the same fingerprint (first 2 salient tokens after
+        stopword removal): 'edit|videos'.
+        """
+        self._seed_draft(
+            test_db, test_user,
+            sender_id="r-1", sender_name="Bob", channel="instagram_dm",
+            content="How do you edit your videos for Instagram posts?",
+            draft_content="I edit videos in Premiere Pro.",
+        )
+        self._seed_draft(
+            test_db, test_user,
+            sender_id="r-2", sender_name="Carol", channel="instagram_dm",
+            content="How do you edit your videos for TikTok reels?",
+            draft_content="I edit videos with CapCut for TikTok.",
+        )
+        create = client.post(
+            "/v1/drafts/batches/cluster",
+            headers=auth_headers,
+            json={"min_cluster_size": 2},
+        )
+        assert create.status_code == 201
+        items = create.json()["items"]
+        assert len(items) >= 1
+        return items[0]["id"]
+
+    def test_approve_renders_placeholder_sender_name(self, client, auth_headers, test_db, test_user_data):
+        """After approval, BatchSend rows should have {sender_name} substituted."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        cluster_id = self._seed_cluster(client, auth_headers, test_db, current_user)
+
+        approve = client.post(
+            f"/v1/drafts/batches/{cluster_id}/approve",
+            headers=auth_headers,
+            json={"template_approved": "Hi {sender_name}, thanks for your question!"},
+        )
+        assert approve.status_code == 200
+        assert approve.json()["status"] == "approved"
+
+        sends = client.get(f"/v1/drafts/batches/{cluster_id}/sends", headers=auth_headers)
+        assert sends.status_code == 200
+        payload = sends.json()
+        assert payload["total"] >= 2
+        for item in payload["items"]:
+            assert "{sender_name}" not in item["personalized_text"]
+            assert item["personalized_text"].startswith("Hi ")
+
+    def test_approve_renders_their_question_placeholder(self, client, auth_headers, test_db, test_user_data):
+        """After approval, {their_question} placeholder should be substituted with message content."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        cluster_id = self._seed_cluster(client, auth_headers, test_db, current_user)
+
+        approve = client.post(
+            f"/v1/drafts/batches/{cluster_id}/approve",
+            headers=auth_headers,
+            json={"template_approved": "You asked: {their_question} — great question!"},
+        )
+        assert approve.status_code == 200
+
+        sends = client.get(f"/v1/drafts/batches/{cluster_id}/sends", headers=auth_headers)
+        assert sends.status_code == 200
+        for item in sends.json()["items"]:
+            assert "{their_question}" not in item["personalized_text"]
+            assert "You asked:" in item["personalized_text"]
+
+    def test_approve_renders_platform_placeholder(self, client, auth_headers, test_db, test_user_data):
+        """After approval, {platform} placeholder should be substituted with channel name."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        cluster_id = self._seed_cluster(client, auth_headers, test_db, current_user)
+
+        approve = client.post(
+            f"/v1/drafts/batches/{cluster_id}/approve",
+            headers=auth_headers,
+            json={"template_approved": "Replying via {platform}."},
+        )
+        assert approve.status_code == 200
+
+        sends = client.get(f"/v1/drafts/batches/{cluster_id}/sends", headers=auth_headers)
+        assert sends.status_code == 200
+        for item in sends.json()["items"]:
+            assert "{platform}" not in item["personalized_text"]
+            assert "instagram_dm" in item["personalized_text"]
+
+    def test_approve_no_placeholders_sends_template_verbatim(
+        self, client, auth_headers, test_db, test_user_data
+    ):
+        """If the approved template has no placeholders, every send row should be identical."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+        cluster_id = self._seed_cluster(client, auth_headers, test_db, current_user)
+
+        template = "Thanks for reaching out! I will get back to you soon."
+        client.post(
+            f"/v1/drafts/batches/{cluster_id}/approve",
+            headers=auth_headers,
+            json={"template_approved": template},
+        )
+
+        sends = client.get(f"/v1/drafts/batches/{cluster_id}/sends", headers=auth_headers)
+        assert sends.status_code == 200
+        texts = [item["personalized_text"] for item in sends.json()["items"]]
+        assert all(t == template for t in texts)
+
+    def test_sends_endpoint_returns_404_for_unknown_cluster(self, client, auth_headers):
+        """/sends should return 404 for a non-existent cluster ID."""
+        sends = client.get("/v1/drafts/batches/non-existent-id/sends", headers=auth_headers)
+        assert sends.status_code == 404
+
+    def test_sends_endpoint_returns_403_for_other_user_cluster(
+        self, client, auth_headers, test_db, test_user_data
+    ):
+        """Cluster owned by user-A should be inaccessible to user-B."""
+        signup = client.post(
+            "/v1/auth/signup",
+            json={"email": "render_other@example.com", "password": "SecurePass123", "name": "Other"},
+        )
+        assert signup.status_code == 201
+        other_headers = {"Authorization": f"Bearer {signup.json()['tokens']['access_token']}"}
+
+        current_user = test_db.query(User).filter(User.email == test_user_data["email"]).first()
+        cluster_id = self._seed_cluster(client, auth_headers, test_db, current_user)
+
+        sends = client.get(f"/v1/drafts/batches/{cluster_id}/sends", headers=other_headers)
+        assert sends.status_code == 403
+
+
+class TestReferralEndpointsContinued:
+    """Continuation of referral endpoint tests (overflow class for isolation)."""
+
+    @staticmethod
+    def _login_headers(client, email, password):
+        resp = client.post("/v1/auth/login", json={"email": email, "password": password})
+        return {"Authorization": f"Bearer {resp.json()['tokens']['access_token']}"}
+
     def test_referral_summary_requires_auth(self, client):
         response = client.get("/v1/referrals/summary")
         assert response.status_code == 403

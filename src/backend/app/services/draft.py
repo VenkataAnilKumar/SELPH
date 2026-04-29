@@ -434,6 +434,41 @@ class DraftService:
         return db.query(MessageCluster).filter(MessageCluster.id == cluster_id).first()
 
     @staticmethod
+    def _render_template(template: str, message: "Message") -> str:
+        """Substitute per-recipient placeholders in a batch template.
+
+        Supported placeholders:
+          {sender_name}   – display name of the message sender
+          {their_question} – first 120 chars of the original message (trimmed)
+          {context_note}  – first 50 chars of the original message (short context)
+          {platform}      – channel identifier (e.g. instagram_dm, gmail)
+        """
+        sender_name = (message.sender_name or "").strip() or "there"
+        raw = (message.content or "").strip()
+        their_question = (raw[:120] + "…") if len(raw) > 120 else raw
+        context_note = (raw[:50] + "…") if len(raw) > 50 else raw
+        platform = (message.channel or "").strip()
+
+        return (
+            template
+            .replace("{sender_name}", sender_name)
+            .replace("{their_question}", their_question)
+            .replace("{context_note}", context_note)
+            .replace("{platform}", platform)
+        )
+
+    @staticmethod
+    def _populate_batch_sends(db: Session, cluster: "MessageCluster") -> None:
+        """Re-render personalized_text for all BatchSend rows using the approved template."""
+        sends = db.query(BatchSend).filter(BatchSend.cluster_id == cluster.id).all()
+        template = cluster.template_approved or cluster.template_draft or ""
+        for send in sends:
+            msg = db.query(Message).filter(Message.id == send.message_id).first()
+            if msg:
+                send.personalized_text = DraftService._render_template(template, msg)
+        db.flush()
+
+    @staticmethod
     def approve_cluster_template(
         db: Session,
         cluster_id: str,
@@ -450,6 +485,21 @@ class DraftService:
         cluster.status = "approved"
         cluster.approved_at = datetime.now(UTC).replace(tzinfo=None)
         db.add(cluster)
+        db.flush()
+
+        # Render per-recipient personalized text immediately on approval.
+        DraftService._populate_batch_sends(db, cluster)
+
         db.commit()
         db.refresh(cluster)
         return cluster
+
+    @staticmethod
+    def list_batch_sends(db: Session, cluster_id: str) -> list["BatchSend"]:
+        """Return all BatchSend rows for a cluster, ordered by created_at."""
+        return (
+            db.query(BatchSend)
+            .filter(BatchSend.cluster_id == cluster_id)
+            .order_by(BatchSend.created_at)
+            .all()
+        )

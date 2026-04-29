@@ -17,6 +17,8 @@ from app.schemas import (
     BatchClusterResponse,
     BatchClusterListResponse,
     BatchTemplateApprovalRequest,
+    BatchSendResponse,
+    BatchSendListResponse,
     DraftVoiceGenerateRequest,
     DraftVoiceGenerateResponse,
     DraftVoiceStatusResponse,
@@ -102,6 +104,25 @@ async def approve_batch_cluster_template(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch cluster not found")
 
     return BatchClusterResponse.model_validate(cluster)
+
+
+@router.get("/batches/{cluster_id}/sends", response_model=BatchSendListResponse)
+async def list_batch_sends(
+    cluster_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List per-recipient personalized send rows for an approved batch cluster."""
+    cluster = DraftService.get_message_cluster(db, cluster_id)
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch cluster not found")
+    if cluster.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+    sends = DraftService.list_batch_sends(db, cluster_id)
+    return BatchSendListResponse(
+        total=len(sends),
+        items=[BatchSendResponse.model_validate(s) for s in sends],
+    )
 
 
 @router.get("/pending", response_model=List[DraftResponse])
