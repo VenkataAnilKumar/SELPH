@@ -13,6 +13,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -35,6 +36,20 @@ def _check_db_reachable(database_url: str, timeout_seconds: int = 3) -> tuple[bo
         return False, f"cannot reach database at {host}:{port} ({exc})"
 
 
+def _wait_for_db(database_url: str, max_wait_seconds: int, attempt_timeout_seconds: int = 3) -> tuple[bool, str]:
+    deadline = time.monotonic() + max_wait_seconds
+    last_detail = "database not reachable"
+
+    while time.monotonic() < deadline:
+        ok, detail = _check_db_reachable(database_url, timeout_seconds=attempt_timeout_seconds)
+        if ok:
+            return True, "ok"
+        last_detail = detail
+        time.sleep(1)
+
+    return False, last_detail
+
+
 def _run(cmd: list[str], cwd: Path) -> int:
     print(f"> {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=str(cwd), check=False)
@@ -55,24 +70,30 @@ def main() -> int:
         default="alembic.ini",
         help="Alembic config path relative to backend root",
     )
+    parser.add_argument(
+        "--db-wait-seconds",
+        type=int,
+        default=45,
+        help="Maximum seconds to wait for database socket readiness before migration",
+    )
     args = parser.parse_args()
 
     root = _backend_root()
     database_url = os.environ.get("DATABASE_URL", "postgresql://localhost/selph")
 
     if not args.skip_migrate:
-        ok, detail = _check_db_reachable(database_url)
+        ok, detail = _wait_for_db(database_url, max_wait_seconds=args.db_wait_seconds)
         if not ok:
             print(f"Migration precheck failed: {detail}")
             print("Hint: start PostgreSQL and ensure DATABASE_URL points to a reachable instance.")
             return 2
 
-        code = _run(["alembic", "-c", args.alembic_config, "upgrade", "head"], cwd=root)
+        code = _run([sys.executable, "-m", "alembic", "-c", args.alembic_config, "upgrade", "head"], cwd=root)
         if code != 0:
             return code
 
     if not args.skip_tests:
-        code = _run(["pytest", args.test_path, "-q"], cwd=root)
+        code = _run([sys.executable, "-m", "pytest", args.test_path, "-q"], cwd=root)
         if code != 0:
             return code
 
