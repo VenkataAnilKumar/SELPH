@@ -46,10 +46,11 @@ This release packages the Phase 8 beta-launch backend stack with creator-facing 
 - #31 Phase 8 PR F: Referral Acceptance Hardening
 - #32 Phase 8 PR G: Readiness Check Hardening
 - #33 Phase 8 PR H: Feature Dependency Readiness Checks
+- #34 Phase 8 PR I: Merge Train and Release Notes Prep
 
 ## Validation
 - Endpoint suite expanded and passing across all new APIs.
-- Latest full backend regression after Phase 8 stack:
+- Latest full backend regression on merge-train tip:
   - `261 passed`
 
 ## Release Notes
