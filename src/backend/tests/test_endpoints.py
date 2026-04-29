@@ -1069,6 +1069,22 @@ class TestHealthEndpoint:
             environment="production",
             enforce_production_jwt_secret=True,
             jwt_secret_key="dev-secret-key-change-in-production",
+            feature_instagram=False,
+            meta_app_id="",
+            meta_app_secret="",
+            meta_verify_token="",
+            meta_oauth_redirect_uri="",
+            feature_gmail=False,
+            google_oauth_client_id="",
+            google_oauth_client_secret="",
+            google_oauth_redirect_uri="",
+            google_pubsub_topic="",
+            feature_voice_clone=False,
+            voice_provider="mock",
+            elevenlabs_api_key="",
+            feature_avatar_clone=False,
+            avatar_provider="mock",
+            heygen_api_key="",
         )
 
         response = client.get("/ready")
@@ -1076,3 +1092,65 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["status"] == "not_ready"
         assert data["checks"]["jwt_secret"]["ok"] is False
+
+    @patch("app.routers.health.get_settings")
+    def test_readiness_check_detects_missing_instagram_config(self, mock_get_settings, client):
+        mock_get_settings.return_value = SimpleNamespace(
+            environment="development",
+            enforce_production_jwt_secret=True,
+            jwt_secret_key="dev-secret-key-change-in-production",
+            feature_instagram=True,
+            meta_app_id="",
+            meta_app_secret="secret",
+            meta_verify_token="verify",
+            meta_oauth_redirect_uri="https://api.selph.ai/v1/channels/instagram/callback",
+            feature_gmail=False,
+            google_oauth_client_id="",
+            google_oauth_client_secret="",
+            google_oauth_redirect_uri="",
+            google_pubsub_topic="",
+            feature_voice_clone=False,
+            voice_provider="mock",
+            elevenlabs_api_key="",
+            feature_avatar_clone=False,
+            avatar_provider="mock",
+            heygen_api_key="",
+        )
+
+        response = client.get("/ready")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["checks"]["feature_instagram"]["ok"] is False
+
+    @patch("app.routers.health.get_settings")
+    def test_readiness_check_feature_dependencies_all_configured(self, mock_get_settings, client):
+        mock_get_settings.return_value = SimpleNamespace(
+            environment="production",
+            enforce_production_jwt_secret=True,
+            jwt_secret_key="this-is-a-very-strong-production-secret-key-12345",
+            feature_instagram=True,
+            meta_app_id="meta-app-id",
+            meta_app_secret="meta-app-secret",
+            meta_verify_token="meta-verify-token",
+            meta_oauth_redirect_uri="https://api.selph.ai/v1/channels/instagram/callback",
+            feature_gmail=True,
+            google_oauth_client_id="google-client-id",
+            google_oauth_client_secret="google-client-secret",
+            google_oauth_redirect_uri="https://api.selph.ai/v1/channels/gmail/callback",
+            google_pubsub_topic="projects/selph/topics/gmail-push",
+            feature_voice_clone=True,
+            voice_provider="elevenlabs",
+            elevenlabs_api_key="elevenlabs-key",
+            feature_avatar_clone=True,
+            avatar_provider="heygen",
+            heygen_api_key="heygen-key",
+        )
+
+        response = client.get("/ready")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ready"
+        assert data["checks"]["feature_instagram"]["ok"] is True
+        assert data["checks"]["feature_gmail"]["ok"] is True
+        assert data["checks"]["feature_voice_clone"]["ok"] is True
+        assert data["checks"]["feature_avatar_clone"]["ok"] is True
