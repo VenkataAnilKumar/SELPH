@@ -62,3 +62,40 @@ jobs:
 
       - name: Run mobile tests
         run: npm test --workspace=src/mobile -- --runInBand --ci
+
+  migration-smoke:
+    name: Migration Smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16-latest
+        env:
+          POSTGRES_USER: selph
+          POSTGRES_PASSWORD: selph_dev_password
+          POSTGRES_DB: selph
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U selph -d selph"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: pip install -r requirements.txt
+
+      - name: Run migration + Phase 10 smoke
+        working-directory: src/backend
+        env:
+          DATABASE_URL: postgresql://selph:selph_dev_password@localhost:5432/selph
+          ENVIRONMENT: development
+        run: python scripts/migrate_and_smoke.py

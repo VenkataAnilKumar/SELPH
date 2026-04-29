@@ -14,7 +14,8 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
-    "format": "npm run format --workspaces"
+    "format": "npm run format --workspaces",
+    "smoke:backend:migrate": "cd src/backend && python scripts/migrate_and_smoke.py"
   },
   "overrides": {
     "react": "18.2.0",
