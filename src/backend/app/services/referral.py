@@ -50,12 +50,16 @@ class ReferralService:
             return None
 
         if invite.referrer_user_id == invitee_user_id:
-            return None
+            raise ValueError("self_referral_not_allowed")
 
-        if invite.status != "accepted":
-            invite.status = "accepted"
-            invite.invitee_user_id = invitee_user_id
-            invite.accepted_at = datetime.now(UTC).replace(tzinfo=None)
+        if invite.status == "accepted":
+            if invite.invitee_user_id == invitee_user_id:
+                return invite
+            raise ValueError("referral_code_already_claimed")
+
+        invite.status = "accepted"
+        invite.invitee_user_id = invitee_user_id
+        invite.accepted_at = datetime.now(UTC).replace(tzinfo=None)
 
         db.add(invite)
         db.commit()
