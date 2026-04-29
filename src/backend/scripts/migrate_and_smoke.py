@@ -36,18 +36,50 @@ def _check_db_reachable(database_url: str, timeout_seconds: int = 3) -> tuple[bo
         return False, f"cannot reach database at {host}:{port} ({exc})"
 
 
-def _wait_for_db(database_url: str, max_wait_seconds: int, attempt_timeout_seconds: int = 3) -> tuple[bool, str]:
+def _with_host(database_url: str, host: str) -> str:
+    parsed = urlparse(database_url)
+    if not parsed.hostname:
+        return database_url
+
+    userinfo = ""
+    if parsed.username:
+        userinfo = parsed.username
+        if parsed.password:
+            userinfo += f":{parsed.password}"
+        userinfo += "@"
+
+    port = parsed.port or 5432
+    netloc = f"{userinfo}{host}:{port}"
+    return parsed._replace(netloc=netloc).geturl()
+
+
+def _candidate_db_urls(database_url: str) -> list[str]:
+    parsed = urlparse(database_url)
+    host = parsed.hostname
+    if not host:
+        return [database_url]
+
+    candidates = [database_url]
+    for fallback in ("127.0.0.1", "localhost", "postgres"):
+        if fallback != host:
+            candidates.append(_with_host(database_url, fallback))
+    return candidates
+
+
+def _wait_for_db(database_url: str, max_wait_seconds: int, attempt_timeout_seconds: int = 3) -> tuple[bool, str, str]:
     deadline = time.monotonic() + max_wait_seconds
     last_detail = "database not reachable"
+    candidates = _candidate_db_urls(database_url)
 
     while time.monotonic() < deadline:
-        ok, detail = _check_db_reachable(database_url, timeout_seconds=attempt_timeout_seconds)
-        if ok:
-            return True, "ok"
-        last_detail = detail
+        for candidate in candidates:
+            ok, detail = _check_db_reachable(candidate, timeout_seconds=attempt_timeout_seconds)
+            if ok:
+                return True, "ok", candidate
+            last_detail = detail
         time.sleep(1)
 
-    return False, last_detail
+    return False, last_detail, database_url
 
 
 def _run(cmd: list[str], cwd: Path) -> int:
@@ -82,11 +114,15 @@ def main() -> int:
     database_url = os.environ.get("DATABASE_URL", "postgresql://localhost/selph")
 
     if not args.skip_migrate:
-        ok, detail = _wait_for_db(database_url, max_wait_seconds=args.db_wait_seconds)
+        ok, detail, resolved_database_url = _wait_for_db(database_url, max_wait_seconds=args.db_wait_seconds)
         if not ok:
             print(f"Migration precheck failed: {detail}")
             print("Hint: start PostgreSQL and ensure DATABASE_URL points to a reachable instance.")
             return 2
+
+        if resolved_database_url != database_url:
+            print(f"Database reachable via fallback host; using {resolved_database_url}")
+            os.environ["DATABASE_URL"] = resolved_database_url
 
         code = _run([sys.executable, "-m", "alembic", "-c", args.alembic_config, "upgrade", "head"], cwd=root)
         if code != 0:
