@@ -16,6 +16,7 @@ from app.schemas.twin import (
     TwinResponse,
     TwinStatsResponse,
     TwinQualitySummaryResponse,
+    TwinWeeklyDigestResponse,
     UpdateTwinRequest,
     MessageResponse,
     DraftResponse,
@@ -36,6 +37,7 @@ from app.schemas.identity import (
     IdentityProfileResponse,
     UpdateIdentityRequest,
     IdentityConfidenceResponse,
+    IdentityOnboardingStatusResponse,
 )
 
 from app.schemas.channels import (
@@ -57,6 +59,7 @@ __all__ = [
     "TwinResponse",
     "TwinStatsResponse",
     "TwinQualitySummaryResponse",
+    "TwinWeeklyDigestResponse",
     "UpdateTwinRequest",
     # Messages & Drafts
     "MessageResponse",
@@ -76,6 +79,7 @@ __all__ = [
     "IdentityProfileResponse",
     "UpdateIdentityRequest",
     "IdentityConfidenceResponse",
+    "IdentityOnboardingStatusResponse",
     # Channels
     "ChannelConnectRequest",
     "ChannelConnectResponse",

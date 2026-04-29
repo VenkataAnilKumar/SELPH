@@ -9,7 +9,13 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import User
 from app.services import TwinService
-from app.schemas import TwinResponse, TwinStatsResponse, TwinQualitySummaryResponse, UpdateTwinRequest
+from app.schemas import (
+    TwinResponse,
+    TwinStatsResponse,
+    TwinQualitySummaryResponse,
+    TwinWeeklyDigestResponse,
+    UpdateTwinRequest,
+)
 
 router = APIRouter(tags=["twin"])
 
@@ -142,4 +148,21 @@ async def get_twin_quality_summary(
         )
 
     return TwinQualitySummaryResponse(**summary)
+
+
+@router.get("/weekly-digest", response_model=TwinWeeklyDigestResponse)
+async def get_twin_weekly_digest(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Phase 8 beta weekly digest preview for the current twin."""
+    digest = TwinService.get_weekly_digest_summary(db, current_user.id)
+
+    if not digest:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Twin not found",
+        )
+
+    return TwinWeeklyDigestResponse(**digest)
 

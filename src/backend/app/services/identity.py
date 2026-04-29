@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import IdentityProfile, Topic, Twin, Consent
+from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential
 
 
 class IdentityService:
@@ -401,3 +401,63 @@ class IdentityService:
         db.commit()
         db.refresh(profile)
         return profile
+
+    @staticmethod
+    def get_onboarding_status(db: Session, user_id: str) -> dict:
+        """Return onboarding completion state and actionable next-step guidance."""
+        profile = IdentityService.get_identity_profile(db, user_id)
+        topics_avoided = IdentityService.get_topics_avoided(db, user_id)
+        twin = db.query(Twin).filter(Twin.user_id == user_id).first()
+
+        active_channels = db.query(ChannelCredential).filter(
+            ChannelCredential.user_id == user_id,
+            ChannelCredential.is_active.is_(True),
+        ).all()
+        connected_channels = sorted(list({c.channel for c in active_channels}))
+
+        required_channels = ["instagram", "gmail"]
+        missing_channels = [c for c in required_channels if c not in connected_channels]
+
+        profile_complete = bool(
+            profile
+            and profile.vocabulary_description
+            and profile.communication_style
+            and topics_avoided
+        )
+        has_channel_connected = len(connected_channels) > 0
+
+        completed_steps = [
+            bool(twin),
+            profile_complete,
+            has_channel_connected,
+        ]
+        completion_percent = int(round((sum(completed_steps) / len(completed_steps)) * 100))
+
+        blockers = []
+        if not profile_complete:
+            blockers.append("complete_onboarding")
+        if not has_channel_connected:
+            blockers.append("connect_first_channel")
+        elif "instagram" not in connected_channels:
+            blockers.append("connect_instagram_business_account")
+
+        if not profile_complete:
+            next_step = "Complete onboarding questionnaire to improve twin quality."
+        elif not has_channel_connected:
+            next_step = "Connect Instagram or Gmail to start receiving real messages."
+        elif "instagram" not in connected_channels:
+            next_step = "Connect an Instagram Business account to reduce onboarding drop-off risk."
+        else:
+            next_step = "Onboarding looks strong. Continue by reviewing and approving first drafts."
+
+        onboarding_complete = profile_complete and has_channel_connected
+
+        return {
+            "onboarding_complete": onboarding_complete,
+            "completion_percent": completion_percent,
+            "profile_complete": profile_complete,
+            "connected_channels": connected_channels,
+            "missing_channels": missing_channels,
+            "blockers": blockers,
+            "next_step": next_step,
+        }

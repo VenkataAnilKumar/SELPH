@@ -116,6 +116,18 @@ class IdentityConfidenceResponse(BaseModel):
     message: str           # human-readable status
 
 
+class IdentityOnboardingStatusResponse(BaseModel):
+    """Onboarding completion and drop-off guidance for Phase 8 polish."""
+
+    onboarding_complete: bool
+    completion_percent: int
+    profile_complete: bool
+    connected_channels: List[str]
+    missing_channels: List[str]
+    blockers: List[str]
+    next_step: str
+
+
 class VoiceConsentRequest(BaseModel):
     """Grant or revoke voice clone consent."""
 

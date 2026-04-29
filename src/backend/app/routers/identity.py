@@ -18,6 +18,7 @@ from app.schemas.identity import (
     IdentityProfileResponse,
     UpdateIdentityRequest,
     IdentityConfidenceResponse,
+    IdentityOnboardingStatusResponse,
     VoiceConsentRequest,
     VoiceConsentResponse,
     VoiceEnrollmentRequest,
@@ -262,6 +263,16 @@ async def get_identity_confidence(
     """
     result = IdentityService.get_confidence_score(db, current_user.id)
     return IdentityConfidenceResponse(**result)
+
+
+@router.get("/onboarding/status", response_model=IdentityOnboardingStatusResponse)
+async def get_onboarding_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return onboarding completion, blockers, and next-step guidance."""
+    status_payload = IdentityService.get_onboarding_status(db, current_user.id)
+    return IdentityOnboardingStatusResponse(**status_payload)
 
 
 # ── Voice Clone (Phase 6 PR B) ──────────────────────────────────────────────
