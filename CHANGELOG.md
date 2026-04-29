@@ -34,6 +34,12 @@ All notable changes to this project are documented in this file.
 - Mobile suite: `32 passed`.
 - Phase 10 API smoke suite: `7 passed`.
 - Migration command reaches database connection stage successfully; local run blocked only because PostgreSQL is not running on `localhost:5432` in this environment.
+- GitHub Actions for commit `b36ebae`:
+	- Backend Tests: success
+	- Web Tests: success
+	- Mobile Tests: success
+	- Migration Smoke: failed during container initialization (invalid service image tag)
+- Follow-up fix: migration smoke service image corrected from `pgvector/pgvector:pg16-latest` to `pgvector/pgvector:pg16`.
 
 ## [0.9.0] - Unreleased
 
