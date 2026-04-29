@@ -69,6 +69,18 @@ class TwinWeeklyDigestResponse(BaseModel):
     summary_line: str
 
 
+class TwinPerformanceSummaryResponse(BaseModel):
+    """Phase 8 performance summary for draft generation latency."""
+
+    twin_id: str
+    drafts_measured_7d: int
+    avg_pipeline_latency_ms_7d: int
+    p95_pipeline_latency_ms_7d: int
+    drafts_over_10s_7d: int
+    on_target_under_10s: bool
+    recommendation: str
+
+
 class UpdateTwinRequest(BaseModel):
     """Request to update twin profile"""
     domain: Optional[str] = None

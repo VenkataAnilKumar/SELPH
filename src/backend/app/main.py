@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.models import Base  # Import models to register with SQLAlchemy
-from app.routers import auth, twin, messages, drafts, channels, health, identity
+from app.routers import auth, twin, messages, drafts, channels, health, identity, referrals
 
 # Get settings
 settings = get_settings()
@@ -105,6 +105,12 @@ def create_app() -> FastAPI:
         identity.router,
         prefix=f"{settings.api_v1_str}/identity",
         tags=["Identity"],
+    )
+
+    app.include_router(
+        referrals.router,
+        prefix=f"{settings.api_v1_str}/referrals",
+        tags=["Referrals"],
     )
 
     return app

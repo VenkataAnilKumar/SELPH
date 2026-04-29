@@ -9,6 +9,7 @@ from app.services.message import MessageService
 from app.services.draft import DraftService
 from app.services.moderation import ModerationService
 from app.services.twin_engine import TwinEngineService
+from app.services.referral import ReferralService
 
 __all__ = [
     "AuthService",
@@ -18,4 +19,5 @@ __all__ = [
     "DraftService",
     "ModerationService",
     "TwinEngineService",
+    "ReferralService",
 ]
