@@ -26,4 +26,5 @@ class User(BaseModel):
     consents = relationship("Consent", back_populates="user", cascade="all, delete-orphan")
     channel_credentials = relationship("ChannelCredential", back_populates="user", cascade="all, delete-orphan")
     topics = relationship("Topic", back_populates="user", cascade="all, delete-orphan")
+    sender_tiers = relationship("SenderTier", cascade="all, delete-orphan")
 

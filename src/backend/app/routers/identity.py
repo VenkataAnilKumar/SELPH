@@ -30,6 +30,9 @@ from app.schemas.identity import (
     TwinBriefingCreateRequest,
     TwinBriefingResponse,
     TwinBriefingListResponse,
+    SenderTierUpsertRequest,
+    SenderTierResponse,
+    SenderTierListResponse,
     RESPONSE_LENGTH_MAP,
 )
 from typing import List
@@ -381,6 +384,83 @@ async def clear_twin_briefing(
         created_at=briefing.created_at,
         updated_at=briefing.updated_at,
     )
+
+
+# ── VIP Override / Sender Tiers (Phase 9 PR B) ─────────────────────────────
+
+@router.put("/sender-tiers", response_model=SenderTierResponse)
+async def upsert_sender_tier(
+    request: SenderTierUpsertRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create or update routing tier for a sender on a platform."""
+    row = IdentityService.upsert_sender_tier(
+        db,
+        user_id=current_user.id,
+        sender_id=request.sender_id,
+        platform=request.platform,
+        tier=request.tier,
+        tier_label=request.tier_label,
+        notes=request.notes,
+        set_by=request.set_by,
+    )
+
+    return SenderTierResponse(
+        id=row.id,
+        user_id=row.user_id,
+        sender_id=row.sender_id,
+        platform=row.platform,
+        tier=row.tier,
+        tier_label=row.tier_label,
+        set_by=row.set_by,
+        notes=row.notes,
+        last_interaction_at=row.last_interaction_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@router.get("/sender-tiers", response_model=SenderTierListResponse)
+async def list_sender_tiers(
+    platform: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List sender-tier overrides, optionally filtered by platform."""
+    rows = IdentityService.list_sender_tiers(db, current_user.id, platform)
+    return SenderTierListResponse(
+        total=len(rows),
+        items=[
+            SenderTierResponse(
+                id=row.id,
+                user_id=row.user_id,
+                sender_id=row.sender_id,
+                platform=row.platform,
+                tier=row.tier,
+                tier_label=row.tier_label,
+                set_by=row.set_by,
+                notes=row.notes,
+                last_interaction_at=row.last_interaction_at,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.delete("/sender-tiers/{platform}/{sender_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_sender_tier(
+    platform: str,
+    sender_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete sender-tier override for a platform sender pair."""
+    deleted = IdentityService.delete_sender_tier(db, current_user.id, platform, sender_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sender tier not found")
 
 
 # ── Voice Clone (Phase 6 PR B) ──────────────────────────────────────────────

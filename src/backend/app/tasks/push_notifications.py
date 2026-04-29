@@ -97,3 +97,40 @@ def notify_draft_ready(user_id: str, draft_id: str) -> dict:
 
     finally:
         db.close()
+
+
+@shared_task
+def notify_vip_message(user_id: str, message_id: str, sender_name: str, channel: str) -> dict:
+    """Send a push notification for VIP-tier direct routing messages."""
+    engine = create_engine(settings.database_url)
+    SessionLocal = sessionmaker(bind=engine)
+    db = SessionLocal()
+
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.push_token:
+            logger.debug(
+                "notify_vip_message: user %s has no push token, skipping", user_id
+            )
+            return {"sent": False, "reason": "no_token"}
+
+        _send_expo_push(
+            token=user.push_token,
+            title="VIP message received",
+            body=f"{sender_name} sent you a direct {channel} message.",
+            data={"message_id": message_id, "type": "vip_direct_notify"},
+        )
+
+        logger.info(
+            "notify_vip_message: sent push to user %s for message %s", user_id, message_id
+        )
+        return {"sent": True}
+
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "notify_vip_message: failed to send push to user %s: %s", user_id, exc
+        )
+        return {"sent": False, "reason": str(exc)}
+
+    finally:
+        db.close()

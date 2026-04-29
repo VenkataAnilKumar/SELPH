@@ -638,3 +638,111 @@ class TestTwinBriefings:
                 "priority": 5,
             },
         ).status_code == 403
+
+
+class TestSenderTiers:
+    def test_upsert_and_list_sender_tier(self, client, auth_headers):
+        upsert = client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "creator-42",
+                "platform": "instagram_dm",
+                "tier": 0,
+                "tier_label": "Top creators",
+                "notes": "Always route directly",
+                "set_by": "user",
+            },
+            headers=auth_headers,
+        )
+        assert upsert.status_code == 200
+        body = upsert.json()
+        assert body["sender_id"] == "creator-42"
+        assert body["platform"] == "instagram_dm"
+        assert body["tier"] == 0
+
+        listed = client.get("/v1/identity/sender-tiers", headers=auth_headers)
+        assert listed.status_code == 200
+        payload = listed.json()
+        assert payload["total"] == 1
+        assert payload["items"][0]["sender_id"] == "creator-42"
+
+    def test_update_existing_sender_tier(self, client, auth_headers):
+        client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "vip-a",
+                "platform": "gmail",
+                "tier": 1,
+            },
+            headers=auth_headers,
+        )
+
+        updated = client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "vip-a",
+                "platform": "gmail",
+                "tier": 0,
+                "set_by": "twin_suggestion",
+            },
+            headers=auth_headers,
+        )
+        assert updated.status_code == 200
+        assert updated.json()["tier"] == 0
+        assert updated.json()["set_by"] == "twin_suggestion"
+
+        listed = client.get("/v1/identity/sender-tiers?platform=gmail", headers=auth_headers)
+        assert listed.status_code == 200
+        assert listed.json()["total"] == 1
+        assert listed.json()["items"][0]["tier"] == 0
+
+    def test_delete_sender_tier(self, client, auth_headers):
+        client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "delete-me",
+                "platform": "instagram_dm",
+                "tier": 2,
+            },
+            headers=auth_headers,
+        )
+
+        deleted = client.delete(
+            "/v1/identity/sender-tiers/instagram_dm/delete-me",
+            headers=auth_headers,
+        )
+        assert deleted.status_code == 204
+
+        listed = client.get("/v1/identity/sender-tiers", headers=auth_headers)
+        assert listed.status_code == 200
+        assert listed.json()["total"] == 0
+
+    def test_sender_tier_validation_and_auth(self, client, auth_headers):
+        invalid_tier = client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "x",
+                "platform": "instagram_dm",
+                "tier": 5,
+            },
+            headers=auth_headers,
+        )
+        assert invalid_tier.status_code == 422
+
+        invalid_set_by = client.put(
+            "/v1/identity/sender-tiers",
+            json={
+                "sender_id": "x",
+                "platform": "instagram_dm",
+                "tier": 2,
+                "set_by": "system",
+            },
+            headers=auth_headers,
+        )
+        assert invalid_set_by.status_code == 422
+
+        assert client.get("/v1/identity/sender-tiers").status_code == 403
+        assert client.put(
+            "/v1/identity/sender-tiers",
+            json={"sender_id": "x", "platform": "instagram_dm", "tier": 2},
+        ).status_code == 403

@@ -178,3 +178,56 @@ class TestDraftGenerationTaskPipeline:
             assert refreshed[0].cleared_at is not None
         finally:
             db.close()
+
+    @patch("app.tasks.push_notifications.notify_vip_message")
+    @patch("app.tasks.push_notifications.notify_draft_ready")
+    def test_generate_draft_task_vip_tier_bypasses_twin_generation(
+        self,
+        mock_notify_draft,
+        mock_notify_vip,
+        test_db,
+        test_user,
+        monkeypatch,
+    ):
+        """Tier-0 sender should bypass draft generation and trigger direct-notify routing."""
+        _bind_task_engine_to_test_db(monkeypatch, test_db)
+        mock_notify_draft.delay = MagicMock(return_value=None)
+        mock_notify_vip.delay = MagicMock(return_value=None)
+
+        IdentityService.upsert_sender_tier(
+            test_db,
+            user_id=test_user.id,
+            sender_id="vip-sender",
+            platform="instagram_dm",
+            tier=0,
+        )
+
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "vip-sender",
+            "Morgan",
+            "Need to talk right now.",
+            {},
+        )
+
+        result = draft_generation_task.generate_draft_for_message.run(message.id, test_user.id)
+
+        assert result["status"] == "success"
+        assert result["routing_action"] == "direct_notify"
+        assert result["tier"] == 0
+        assert result.get("draft_id") is None
+
+        db = sessionmaker(bind=test_db.get_bind())()
+        try:
+            stored_message = db.query(Message).filter(Message.id == message.id).first()
+            stored_draft = db.query(Draft).filter(Draft.message_id == message.id).first()
+            assert stored_message is not None
+            assert stored_message.status == "vip_direct_notify"
+            assert stored_draft is None
+        finally:
+            db.close()
+
+        assert mock_notify_vip.delay.call_count == 1
+        assert mock_notify_draft.delay.call_count == 0

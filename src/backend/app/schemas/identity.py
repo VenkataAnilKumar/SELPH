@@ -269,3 +269,53 @@ class TwinBriefingListResponse(BaseModel):
 
     active_count: int
     items: List[TwinBriefingResponse]
+
+
+class SenderTierUpsertRequest(BaseModel):
+    """Create or update a sender tier override."""
+
+    sender_id: str
+    platform: str
+    tier: int = Field(ge=0, le=3)
+    tier_label: Optional[str] = None
+    notes: Optional[str] = None
+    set_by: str = "user"
+
+    @field_validator("sender_id", "platform")
+    @classmethod
+    def required_non_empty(cls, v: str) -> str:
+        normalized = v.strip()
+        if not normalized:
+            raise ValueError("field cannot be empty")
+        return normalized
+
+    @field_validator("set_by")
+    @classmethod
+    def valid_set_by(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"user", "twin_suggestion"}:
+            raise ValueError("set_by must be 'user' or 'twin_suggestion'")
+        return normalized
+
+
+class SenderTierResponse(BaseModel):
+    """Sender tier routing override payload."""
+
+    id: str
+    user_id: str
+    sender_id: str
+    platform: str
+    tier: int
+    tier_label: Optional[str] = None
+    set_by: str
+    notes: Optional[str] = None
+    last_interaction_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SenderTierListResponse(BaseModel):
+    """List of configured sender tier overrides."""
+
+    total: int
+    items: List[SenderTierResponse]

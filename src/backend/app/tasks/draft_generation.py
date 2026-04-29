@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.models import Message
 from app.services import DraftService, TwinEngineService
+from app.services.identity import IdentityService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,37 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
             if not message:
                 logger.error(f"Message {message_id} not found")
                 return {"status": "error", "reason": "Message not found"}
+
+            sender_tier = IdentityService.get_sender_tier_value(
+                db,
+                user_id=user_id,
+                sender_id=message.sender_id,
+                platform=message.channel,
+            )
+
+            # Tier 0 (VIP): bypass twin and notify user directly.
+            if sender_tier == 0:
+                message.status = "vip_direct_notify"
+                db.commit()
+
+                from app.tasks.push_notifications import notify_vip_message
+                notify_vip_message.delay(user_id, message.id, message.sender_name, message.channel)
+
+                logger.info(
+                    "VIP direct routing for message %s user=%s sender=%s channel=%s",
+                    message.id,
+                    user_id,
+                    message.sender_id,
+                    message.channel,
+                )
+                return {
+                    "status": "success",
+                    "routing_action": "direct_notify",
+                    "tier": sender_tier,
+                    "message_id": message.id,
+                    "generation_source": None,
+                    "metrics": {"used_fallback": False},
+                }
             
             # 2. Run Twin Engine Phase 2 pipeline
             pipeline = TwinEngineService.run_twin_pipeline(db, message.id, user_id)
@@ -101,6 +133,8 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
                 "moderation_passed": pipeline["moderation_passed"],
                 "generation_source": pipeline.get("generation_source"),
                 "briefing_ids_referenced": pipeline.get("briefing_ids_referenced", []),
+                "routing_action": "notify_user_force_review" if sender_tier == 1 else "notify_user",
+                "tier": sender_tier,
                 "metrics": pipeline.get("metrics", {}),
             }
         

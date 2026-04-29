@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential, TwinBriefing
+from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential, TwinBriefing, SenderTier
 
 
 class IdentityService:
@@ -539,3 +539,71 @@ class IdentityService:
         db.commit()
         db.refresh(briefing)
         return briefing
+
+    @staticmethod
+    def upsert_sender_tier(
+        db: Session,
+        user_id: str,
+        sender_id: str,
+        platform: str,
+        tier: int,
+        tier_label: str | None = None,
+        notes: str | None = None,
+        set_by: str = "user",
+    ) -> SenderTier:
+        """Create or update per-sender routing tier."""
+        row = db.query(SenderTier).filter(
+            SenderTier.user_id == user_id,
+            SenderTier.sender_id == sender_id,
+            SenderTier.platform == platform,
+        ).first()
+
+        if not row:
+            row = SenderTier(
+                user_id=user_id,
+                sender_id=sender_id,
+                platform=platform,
+            )
+
+        row.tier = tier
+        row.tier_label = tier_label
+        row.notes = notes
+        row.set_by = set_by
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def list_sender_tiers(db: Session, user_id: str, platform: str | None = None) -> list[SenderTier]:
+        """List sender tier overrides for a user."""
+        query = db.query(SenderTier).filter(SenderTier.user_id == user_id)
+        if platform:
+            query = query.filter(SenderTier.platform == platform)
+        return query.order_by(SenderTier.tier.asc(), SenderTier.updated_at.desc()).all()
+
+    @staticmethod
+    def delete_sender_tier(db: Session, user_id: str, platform: str, sender_id: str) -> bool:
+        """Delete sender tier override by (user, platform, sender)."""
+        row = db.query(SenderTier).filter(
+            SenderTier.user_id == user_id,
+            SenderTier.platform == platform,
+            SenderTier.sender_id == sender_id,
+        ).first()
+        if not row:
+            return False
+
+        db.delete(row)
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_sender_tier_value(db: Session, user_id: str, sender_id: str, platform: str) -> int:
+        """Resolve routing tier for a sender; default to Standard (2)."""
+        row = db.query(SenderTier).filter(
+            SenderTier.user_id == user_id,
+            SenderTier.platform == platform,
+            SenderTier.sender_id == sender_id,
+        ).first()
+        return row.tier if row else 2
