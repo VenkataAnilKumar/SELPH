@@ -541,3 +541,100 @@ class TestAvatarCloneEnrollment:
         assert client.post("/v1/identity/avatar/enroll", json={"avatar_provider": "mock"}).status_code == 403
         assert client.get("/v1/identity/avatar/profile").status_code == 403
         assert client.delete("/v1/identity/avatar/profile").status_code == 403
+
+
+# ── Twin Briefings (Phase 9 PR A) ───────────────────────────────────────────
+
+class TestTwinBriefings:
+    def test_create_and_list_active_briefings(self, client, auth_headers):
+        create = client.post(
+            "/v1/identity/briefings",
+            json={
+                "briefing_type": "fact",
+                "topic": "new course launch",
+                "content": "My new course is live this week at selph.ai/course",
+                "priority": 8,
+            },
+            headers=auth_headers,
+        )
+        assert create.status_code == 201
+        created = create.json()
+        assert created["briefing_type"] == "fact"
+        assert created["topic"] == "new course launch"
+        assert created["priority"] == 8
+        assert created["is_active"] is True
+
+        listed = client.get("/v1/identity/briefings", headers=auth_headers)
+        assert listed.status_code == 200
+        payload = listed.json()
+        assert payload["active_count"] == 1
+        assert len(payload["items"]) == 1
+        assert payload["items"][0]["topic"] == "new course launch"
+
+    def test_clear_briefing_and_include_inactive(self, client, auth_headers):
+        create = client.post(
+            "/v1/identity/briefings",
+            json={
+                "briefing_type": "instruction",
+                "topic": "collabs",
+                "content": "Ask collab requests to DM my manager",
+                "priority": 7,
+            },
+            headers=auth_headers,
+        )
+        briefing_id = create.json()["id"]
+
+        clear = client.post(f"/v1/identity/briefings/{briefing_id}/clear", headers=auth_headers)
+        assert clear.status_code == 200
+        cleared = clear.json()
+        assert cleared["is_active"] is False
+        assert cleared["cleared_at"] is not None
+
+        active_only = client.get("/v1/identity/briefings", headers=auth_headers)
+        assert active_only.status_code == 200
+        assert active_only.json()["active_count"] == 0
+        assert active_only.json()["items"] == []
+
+        include_inactive = client.get("/v1/identity/briefings?include_inactive=true", headers=auth_headers)
+        assert include_inactive.status_code == 200
+        assert len(include_inactive.json()["items"]) == 1
+        assert include_inactive.json()["items"][0]["is_active"] is False
+
+    def test_create_briefing_enforces_max_10_active(self, client, auth_headers):
+        for idx in range(10):
+            response = client.post(
+                "/v1/identity/briefings",
+                json={
+                    "briefing_type": "fact",
+                    "topic": f"topic-{idx}",
+                    "content": f"briefing content {idx}",
+                    "priority": 5,
+                },
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+
+        blocked = client.post(
+            "/v1/identity/briefings",
+            json={
+                "briefing_type": "fact",
+                "topic": "overflow",
+                "content": "this should fail",
+                "priority": 5,
+            },
+            headers=auth_headers,
+        )
+        assert blocked.status_code == 400
+        assert "Maximum 10 active briefings" in blocked.json()["detail"]
+
+    def test_briefing_endpoints_require_auth(self, client):
+        assert client.get("/v1/identity/briefings").status_code == 403
+        assert client.post(
+            "/v1/identity/briefings",
+            json={
+                "briefing_type": "fact",
+                "topic": "x",
+                "content": "y",
+                "priority": 5,
+            },
+        ).status_code == 403

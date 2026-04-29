@@ -2,9 +2,10 @@
 Pydantic schemas for Identity endpoints
 """
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from enum import Enum
+from datetime import datetime
 
 
 class CommunicationStyle(str, Enum):
@@ -208,3 +209,63 @@ class AvatarEnrollmentResponse(BaseModel):
     avatar_model_id: Optional[str] = None
     avatar_sample_url: Optional[str] = None
     consent_granted: bool
+
+
+class BriefingType(str, Enum):
+    fact = "fact"
+    opinion = "opinion"
+    instruction = "instruction"
+    availability = "availability"
+    boundary = "boundary"
+
+
+class TwinBriefingCreateRequest(BaseModel):
+    """Create a time-scoped twin briefing."""
+
+    briefing_type: BriefingType
+    topic: str
+    content: str
+    priority: int = Field(default=5, ge=1, le=10)
+    expires_at: Optional[datetime] = None
+    max_uses: Optional[int] = Field(default=None, ge=1)
+
+    @field_validator("topic")
+    @classmethod
+    def topic_not_empty(cls, v: str) -> str:
+        normalized = v.strip()
+        if not normalized:
+            raise ValueError("topic cannot be empty")
+        return normalized
+
+    @field_validator("content")
+    @classmethod
+    def content_not_empty(cls, v: str) -> str:
+        normalized = v.strip()
+        if not normalized:
+            raise ValueError("content cannot be empty")
+        return normalized
+
+
+class TwinBriefingResponse(BaseModel):
+    """Twin briefing payload returned to clients."""
+
+    id: str
+    user_id: str
+    briefing_type: str
+    topic: str
+    content: str
+    priority: int
+    is_active: bool
+    expires_at: Optional[datetime] = None
+    max_uses: Optional[int] = None
+    use_count: int
+    cleared_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TwinBriefingListResponse(BaseModel):
+    """List of briefings for dashboard views."""
+
+    active_count: int
+    items: List[TwinBriefingResponse]

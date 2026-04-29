@@ -27,6 +27,9 @@ from app.schemas.identity import (
     AvatarConsentResponse,
     AvatarEnrollmentRequest,
     AvatarEnrollmentResponse,
+    TwinBriefingCreateRequest,
+    TwinBriefingResponse,
+    TwinBriefingListResponse,
     RESPONSE_LENGTH_MAP,
 )
 from typing import List
@@ -273,6 +276,111 @@ async def get_onboarding_status(
     """Return onboarding completion, blockers, and next-step guidance."""
     status_payload = IdentityService.get_onboarding_status(db, current_user.id)
     return IdentityOnboardingStatusResponse(**status_payload)
+
+
+# ── Twin Briefings (Phase 9 PR A) ───────────────────────────────────────────
+
+@router.post("/briefings", response_model=TwinBriefingResponse, status_code=status.HTTP_201_CREATED)
+async def create_twin_briefing(
+    request: TwinBriefingCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a briefing that is injected into future twin prompts."""
+    try:
+        briefing = IdentityService.create_twin_briefing(
+            db,
+            user_id=current_user.id,
+            briefing_type=request.briefing_type.value,
+            topic=request.topic,
+            content=request.content,
+            priority=request.priority,
+            expires_at=request.expires_at,
+            max_uses=request.max_uses,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return TwinBriefingResponse(
+        id=briefing.id,
+        user_id=briefing.user_id,
+        briefing_type=briefing.briefing_type,
+        topic=briefing.topic,
+        content=briefing.content,
+        priority=briefing.priority,
+        is_active=briefing.is_active,
+        expires_at=briefing.expires_at,
+        max_uses=briefing.max_uses,
+        use_count=briefing.use_count,
+        cleared_at=briefing.cleared_at,
+        created_at=briefing.created_at,
+        updated_at=briefing.updated_at,
+    )
+
+
+@router.get("/briefings", response_model=TwinBriefingListResponse)
+async def list_twin_briefings(
+    include_inactive: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List current user briefings, defaulting to active-only."""
+    rows = IdentityService.list_twin_briefings(
+        db,
+        user_id=current_user.id,
+        include_inactive=include_inactive,
+    )
+    active_count = IdentityService.count_active_twin_briefings(db, current_user.id)
+
+    return TwinBriefingListResponse(
+        active_count=active_count,
+        items=[
+            TwinBriefingResponse(
+                id=row.id,
+                user_id=row.user_id,
+                briefing_type=row.briefing_type,
+                topic=row.topic,
+                content=row.content,
+                priority=row.priority,
+                is_active=row.is_active,
+                expires_at=row.expires_at,
+                max_uses=row.max_uses,
+                use_count=row.use_count,
+                cleared_at=row.cleared_at,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.post("/briefings/{briefing_id}/clear", response_model=TwinBriefingResponse)
+async def clear_twin_briefing(
+    briefing_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Clear a briefing immediately so it is no longer active."""
+    briefing = IdentityService.clear_twin_briefing(db, current_user.id, briefing_id)
+    if not briefing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Briefing not found")
+
+    return TwinBriefingResponse(
+        id=briefing.id,
+        user_id=briefing.user_id,
+        briefing_type=briefing.briefing_type,
+        topic=briefing.topic,
+        content=briefing.content,
+        priority=briefing.priority,
+        is_active=briefing.is_active,
+        expires_at=briefing.expires_at,
+        max_uses=briefing.max_uses,
+        use_count=briefing.use_count,
+        cleared_at=briefing.cleared_at,
+        created_at=briefing.created_at,
+        updated_at=briefing.updated_at,
+    )
 
 
 # ── Voice Clone (Phase 6 PR B) ──────────────────────────────────────────────

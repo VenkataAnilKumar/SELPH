@@ -13,6 +13,7 @@ from app.models.topic import Topic
 from app.models.consent import Consent
 from app.models.channel_credential import ChannelCredential
 from app.models.referral_invite import ReferralInvite
+from app.models.twin_briefing import TwinBriefing
 
 __all__ = [
     "Base",
@@ -27,4 +28,5 @@ __all__ = [
     "Consent",
     "ChannelCredential",
     "ReferralInvite",
+    "TwinBriefing",
 ]

@@ -12,11 +12,12 @@ with LiteLLM/Claude while preserving the same pipeline contract.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, UTC
 import json
 import logging
 import time
 from sqlalchemy.orm import Session
-from app.models import Message, Twin, IdentityProfile, Topic
+from app.models import Message, Twin, IdentityProfile, Topic, TwinBriefing
 from app.services.moderation import ModerationService
 from app.config import get_settings
 
@@ -74,6 +75,7 @@ class TwinContext:
     identity: IdentityProfile
     known_topics: list[str]
     avoided_topics: list[str]
+    active_briefings: list[TwinBriefing]
     history: list[Message]
     constraints: ChannelConstraints
 
@@ -235,24 +237,50 @@ class TwinEngineService:
             ),
         )
 
+        now_dt = datetime.now(UTC).replace(tzinfo=None)
+        briefing_rows = db.query(TwinBriefing).filter(
+            TwinBriefing.user_id == user_id,
+            TwinBriefing.is_active.is_(True),
+            TwinBriefing.cleared_at.is_(None),
+        ).order_by(
+            TwinBriefing.priority.desc(),
+            TwinBriefing.created_at.desc(),
+        ).all()
+
+        active_briefings = [
+            b for b in briefing_rows
+            if (b.expires_at is None or b.expires_at > now_dt)
+            and (b.max_uses is None or b.use_count < b.max_uses)
+        ]
+
         return TwinContext(
             message=message,
             twin=twin,
             identity=identity,
             known_topics=known_topics,
             avoided_topics=avoided_topics,
+            active_briefings=active_briefings,
             history=history,
             constraints=constraints,
         )
 
     @staticmethod
     def _build_prompts(ctx: TwinContext) -> tuple[str, str]:
+        briefing_block = ""
+        if ctx.active_briefings:
+            lines = [
+                f"[{b.briefing_type.upper()}|P{b.priority}] {b.content}"
+                for b in ctx.active_briefings
+            ]
+            briefing_block = " ActiveBriefings=" + " || ".join(lines)
+
         system_prompt = (
             f"You are the digital twin of this user. "
             f"Tone={ctx.twin.tone}; Domain={ctx.twin.domain}; "
             f"AvgLength={ctx.twin.avg_response_length}; "
             f"ChannelHint={ctx.constraints.style_hint}; "
             f"AvoidedTopics={', '.join(ctx.avoided_topics) or 'none'}."
+            f"{briefing_block}"
         )
 
         history_preview = " | ".join([m.content[:80] for m in reversed(ctx.history)])

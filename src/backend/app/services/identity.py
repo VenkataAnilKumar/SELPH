@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential
+from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential, TwinBriefing
 
 
 class IdentityService:
@@ -461,3 +461,81 @@ class IdentityService:
             "blockers": blockers,
             "next_step": next_step,
         }
+
+    @staticmethod
+    def _briefing_is_active_now(briefing: TwinBriefing) -> bool:
+        """Determine whether a briefing should be considered active at current time."""
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if not briefing.is_active:
+            return False
+        if briefing.cleared_at is not None:
+            return False
+        if briefing.expires_at is not None and briefing.expires_at <= now:
+            return False
+        if briefing.max_uses is not None and briefing.use_count >= briefing.max_uses:
+            return False
+        return True
+
+    @staticmethod
+    def list_twin_briefings(db: Session, user_id: str, include_inactive: bool = False) -> list[TwinBriefing]:
+        """List user briefings, optionally including inactive items."""
+        rows = db.query(TwinBriefing).filter(TwinBriefing.user_id == user_id).order_by(
+            TwinBriefing.priority.desc(),
+            TwinBriefing.created_at.desc(),
+        ).all()
+        if include_inactive:
+            return rows
+        return [row for row in rows if IdentityService._briefing_is_active_now(row)]
+
+    @staticmethod
+    def count_active_twin_briefings(db: Session, user_id: str) -> int:
+        """Count currently active briefings for enforcement and dashboards."""
+        return len(IdentityService.list_twin_briefings(db, user_id, include_inactive=False))
+
+    @staticmethod
+    def create_twin_briefing(
+        db: Session,
+        user_id: str,
+        briefing_type: str,
+        topic: str,
+        content: str,
+        priority: int = 5,
+        expires_at: datetime | None = None,
+        max_uses: int | None = None,
+    ) -> TwinBriefing:
+        """Create a new active twin briefing with guardrails."""
+        if IdentityService.count_active_twin_briefings(db, user_id) >= 10:
+            raise ValueError("Maximum 10 active briefings allowed")
+
+        briefing = TwinBriefing(
+            user_id=user_id,
+            briefing_type=briefing_type,
+            topic=topic,
+            content=content,
+            priority=priority,
+            is_active=True,
+            expires_at=expires_at,
+            max_uses=max_uses,
+            use_count=0,
+        )
+        db.add(briefing)
+        db.commit()
+        db.refresh(briefing)
+        return briefing
+
+    @staticmethod
+    def clear_twin_briefing(db: Session, user_id: str, briefing_id: str) -> TwinBriefing | None:
+        """Deactivate a briefing immediately so it is no longer injected."""
+        briefing = db.query(TwinBriefing).filter(
+            TwinBriefing.id == briefing_id,
+            TwinBriefing.user_id == user_id,
+        ).first()
+        if not briefing:
+            return None
+
+        briefing.is_active = False
+        briefing.cleared_at = datetime.now(UTC).replace(tzinfo=None)
+        db.add(briefing)
+        db.commit()
+        db.refresh(briefing)
+        return briefing
