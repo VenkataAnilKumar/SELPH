@@ -96,6 +96,6 @@ jobs:
       - name: Run migration + Phase 10 smoke
         working-directory: src/backend
         env:
-          DATABASE_URL: postgresql://selph:selph_dev_password@localhost:5432/selph
+          DATABASE_URL: postgresql://selph:selph_dev_password@127.0.0.1:5432/selph
           ENVIRONMENT: development
         run: python scripts/migrate_and_smoke.py
