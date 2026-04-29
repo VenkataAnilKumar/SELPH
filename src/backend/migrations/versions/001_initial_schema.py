@@ -20,6 +20,12 @@ def upgrade() -> None:
     # Required for Vector(...) columns used in identity_profiles/topics.
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
+    # Alembic creates alembic_version with VARCHAR(32) by default; our revision
+    # IDs are longer, so widen the column before any upgrade writes to it.
+    op.execute(
+        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(256)"
+    )
+
     # Create users table
     op.create_table(
         'users',
