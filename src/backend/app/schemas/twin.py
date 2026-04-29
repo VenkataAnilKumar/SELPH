@@ -200,4 +200,44 @@ class DraftAvatarStatusResponse(BaseModel):
     avatar_error: Optional[str] = None
 
 
+class BatchClusterCreateRequest(BaseModel):
+    """Create message clusters from pending drafts."""
+
+    min_cluster_size: int = 2
+    channel: Optional[str] = None
+
+
+class BatchClusterResponse(BaseModel):
+    """Batch cluster payload."""
+
+    id: str
+    user_id: str
+    cluster_label: str
+    cluster_summary: str
+    message_ids: list[str]
+    message_count: int
+    template_draft: str
+    template_approved: Optional[str] = None
+    status: str
+    approved_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BatchClusterListResponse(BaseModel):
+    """List response for batch clusters."""
+
+    total: int
+    items: list[BatchClusterResponse]
+
+
+class BatchTemplateApprovalRequest(BaseModel):
+    """Approve cluster template for batch sends."""
+
+    template_approved: Optional[str] = None
+
+
 

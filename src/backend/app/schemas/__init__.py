@@ -28,6 +28,10 @@ from app.schemas.twin import (
     DraftAvatarGenerateRequest,
     DraftAvatarGenerateResponse,
     DraftAvatarStatusResponse,
+    BatchClusterCreateRequest,
+    BatchClusterResponse,
+    BatchClusterListResponse,
+    BatchTemplateApprovalRequest,
 )
 
 from app.schemas.identity import (
@@ -73,6 +77,10 @@ __all__ = [
     "DraftAvatarGenerateRequest",
     "DraftAvatarGenerateResponse",
     "DraftAvatarStatusResponse",
+    "BatchClusterCreateRequest",
+    "BatchClusterResponse",
+    "BatchClusterListResponse",
+    "BatchTemplateApprovalRequest",
     # Identity
     "OnboardingRequest",
     "OnboardingResponse",

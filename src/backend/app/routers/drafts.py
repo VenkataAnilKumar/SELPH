@@ -13,6 +13,10 @@ from app.services.identity import IdentityService
 from app.schemas import (
     DraftResponse,
     DraftApprovalRequest,
+    BatchClusterCreateRequest,
+    BatchClusterResponse,
+    BatchClusterListResponse,
+    BatchTemplateApprovalRequest,
     DraftVoiceGenerateRequest,
     DraftVoiceGenerateResponse,
     DraftVoiceStatusResponse,
@@ -26,6 +30,78 @@ from app.tasks.avatar_generation import generate_avatar
 from typing import List
 
 router = APIRouter(tags=["drafts"])
+
+
+@router.post("/batches/cluster", response_model=BatchClusterListResponse, status_code=status.HTTP_201_CREATED)
+async def create_batch_clusters(
+    request: BatchClusterCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cluster pending drafts into batch-approval groups."""
+    clusters = DraftService.create_message_clusters(
+        db,
+        user_id=current_user.id,
+        min_cluster_size=request.min_cluster_size,
+        channel=request.channel,
+    )
+    return BatchClusterListResponse(
+        total=len(clusters),
+        items=[BatchClusterResponse.model_validate(c) for c in clusters],
+    )
+
+
+@router.get("/batches", response_model=BatchClusterListResponse)
+async def list_batch_clusters(
+    status: str | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List batch clusters for the current user."""
+    clusters = DraftService.list_message_clusters(db, current_user.id, status=status)
+    return BatchClusterListResponse(
+        total=len(clusters),
+        items=[BatchClusterResponse.model_validate(c) for c in clusters],
+    )
+
+
+@router.get("/batches/{cluster_id}", response_model=BatchClusterResponse)
+async def get_batch_cluster(
+    cluster_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get one batch cluster by ID."""
+    cluster = DraftService.get_message_cluster(db, cluster_id)
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch cluster not found")
+    if cluster.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+    return BatchClusterResponse.model_validate(cluster)
+
+
+@router.post("/batches/{cluster_id}/approve", response_model=BatchClusterResponse)
+async def approve_batch_cluster_template(
+    cluster_id: str,
+    request: BatchTemplateApprovalRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Approve template for a batch cluster."""
+    try:
+        cluster = DraftService.approve_cluster_template(
+            db,
+            cluster_id=cluster_id,
+            user_id=current_user.id,
+            template_approved=request.template_approved,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch cluster not found")
+
+    return BatchClusterResponse.model_validate(cluster)
 
 
 @router.get("/pending", response_model=List[DraftResponse])

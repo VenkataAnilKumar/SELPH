@@ -557,6 +557,78 @@ class TestDraftEndpoints:
         
         assert response.status_code == 403
 
+    def test_create_batch_clusters_and_list(self, client, auth_headers, test_db, test_user_data):
+        """Batch clustering should group similar pending drafts and return cluster metadata."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+
+        self._seed_draft(
+            test_db,
+            current_user,
+            sender_id="s-a",
+            content="How do you edit your videos for reels?",
+            draft_content="Thanks for asking about my editing workflow.",
+        )
+        self._seed_draft(
+            test_db,
+            current_user,
+            sender_id="s-b",
+            content="How do you edit your videos for shorts?",
+            draft_content="I use a simple editing workflow for shorts.",
+        )
+
+        create = client.post(
+            "/v1/drafts/batches/cluster",
+            headers=auth_headers,
+            json={"min_cluster_size": 2},
+        )
+        assert create.status_code == 201
+        data = create.json()
+        assert data["total"] >= 1
+        assert data["items"][0]["status"] == "pending"
+        assert data["items"][0]["message_count"] >= 2
+
+        listed = client.get("/v1/drafts/batches", headers=auth_headers)
+        assert listed.status_code == 200
+        assert listed.json()["total"] >= 1
+
+    def test_approve_batch_cluster_template(self, client, auth_headers, test_db, test_user_data):
+        """Approving a batch cluster should persist template_approved and approved status."""
+        current_user = self._get_authenticated_user(test_db, test_user_data)
+
+        self._seed_draft(
+            test_db,
+            current_user,
+            sender_id="s-c",
+            content="Can you share your workout routine?",
+            draft_content="Thanks for asking about my routine.",
+        )
+        self._seed_draft(
+            test_db,
+            current_user,
+            sender_id="s-d",
+            content="Can you share your workout split?",
+            draft_content="Happy to share my workout split.",
+        )
+
+        create = client.post(
+            "/v1/drafts/batches/cluster",
+            headers=auth_headers,
+            json={"min_cluster_size": 2},
+        )
+        assert create.status_code == 201
+        cluster_id = create.json()["items"][0]["id"]
+
+        approve = client.post(
+            f"/v1/drafts/batches/{cluster_id}/approve",
+            headers=auth_headers,
+            json={"template_approved": "Hey {sender_name}, here is my workout routine."},
+        )
+        assert approve.status_code == 200
+        payload = approve.json()
+        assert payload["status"] == "approved"
+        assert payload["template_approved"] == "Hey {sender_name}, here is my workout routine."
+        assert payload["approved_at"] is not None
+
     @patch("app.routers.drafts.get_settings")
     @patch("app.routers.drafts.synthesize_voice")
     def test_generate_voice_queues_task_for_approved_draft(

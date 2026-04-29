@@ -15,6 +15,8 @@ from app.models.channel_credential import ChannelCredential
 from app.models.referral_invite import ReferralInvite
 from app.models.twin_briefing import TwinBriefing
 from app.models.sender_tier import SenderTier
+from app.models.message_cluster import MessageCluster
+from app.models.batch_send import BatchSend
 
 __all__ = [
     "Base",
@@ -31,4 +33,6 @@ __all__ = [
     "ReferralInvite",
     "TwinBriefing",
     "SenderTier",
+    "MessageCluster",
+    "BatchSend",
 ]

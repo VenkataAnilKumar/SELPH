@@ -4,7 +4,9 @@ Draft management service for approval workflow
 
 from sqlalchemy.orm import Session
 from app.models import Draft, Message, Twin, AuditLog
+from app.models import MessageCluster, BatchSend
 from app.services.twin_learning import TwinLearningService
+from datetime import datetime, UTC
 
 
 class DraftService:
@@ -330,3 +332,124 @@ class DraftService:
         db.commit()
         db.refresh(draft)
         return draft
+
+    @staticmethod
+    def _fingerprint_message(content: str) -> tuple[str, str]:
+        """Create a deterministic fingerprint and human label from message text."""
+        stopwords = {
+            "the", "and", "for", "with", "this", "that", "from", "your", "you", "are", "about",
+            "what", "when", "where", "how", "can", "please", "just", "have", "been", "into",
+        }
+        cleaned = "".join(ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in content)
+        tokens = [t for t in cleaned.split() if len(t) >= 3 and t not in stopwords]
+        if not tokens:
+            return "misc", "General questions"
+        # Use the first two salient tokens for stable, high-recall grouping.
+        key_tokens = tokens[:2]
+        fingerprint = "|".join(sorted(set(key_tokens)))
+        label = " ".join(tokens[:3]).strip()
+        return fingerprint, label.title() if label else "General questions"
+
+    @staticmethod
+    def _pending_drafts_for_batch(db: Session, user_id: str, channel: str | None = None) -> list[Draft]:
+        query = db.query(Draft).join(Message, Draft.message_id == Message.id).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        )
+        if channel:
+            query = query.filter(Message.channel == channel)
+
+        # Skip drafts already added to any batch send row.
+        used_draft_ids = {row.draft_id for row in db.query(BatchSend).filter(BatchSend.draft_id.isnot(None)).all()}
+        rows = query.order_by(Draft.created_at.desc()).all()
+        return [row for row in rows if row.id not in used_draft_ids]
+
+    @staticmethod
+    def create_message_clusters(
+        db: Session,
+        user_id: str,
+        min_cluster_size: int = 2,
+        channel: str | None = None,
+    ) -> list[MessageCluster]:
+        """Create pending clusters from unbatched pending drafts using deterministic grouping."""
+        min_cluster_size = max(2, min_cluster_size)
+        pending = DraftService._pending_drafts_for_batch(db, user_id, channel)
+
+        buckets: dict[str, list[Draft]] = {}
+        labels: dict[str, str] = {}
+        for draft in pending:
+            if not draft.message:
+                continue
+            key, label = DraftService._fingerprint_message(draft.message.content)
+            buckets.setdefault(key, []).append(draft)
+            labels.setdefault(key, label)
+
+        created_clusters: list[MessageCluster] = []
+        for key, members in buckets.items():
+            if len(members) < min_cluster_size:
+                continue
+
+            message_ids = [m.message_id for m in members]
+            template_draft = members[0].content
+            summary = f"{len(members)} messages asking similar question"
+
+            cluster = MessageCluster(
+                user_id=user_id,
+                cluster_label=labels.get(key, "General questions"),
+                cluster_summary=summary,
+                message_ids=message_ids,
+                message_count=len(message_ids),
+                template_draft=template_draft,
+                status="pending",
+            )
+            db.add(cluster)
+            db.flush()
+
+            for member in members:
+                db.add(BatchSend(
+                    cluster_id=cluster.id,
+                    message_id=member.message_id,
+                    draft_id=member.id,
+                    sender_id=member.message.sender_id if member.message else "unknown",
+                    personalized_text=member.content,
+                    status="queued",
+                ))
+
+            created_clusters.append(cluster)
+
+        db.commit()
+        for cluster in created_clusters:
+            db.refresh(cluster)
+        return created_clusters
+
+    @staticmethod
+    def list_message_clusters(db: Session, user_id: str, status: str | None = None) -> list[MessageCluster]:
+        query = db.query(MessageCluster).filter(MessageCluster.user_id == user_id)
+        if status:
+            query = query.filter(MessageCluster.status == status)
+        return query.order_by(MessageCluster.created_at.desc()).all()
+
+    @staticmethod
+    def get_message_cluster(db: Session, cluster_id: str) -> MessageCluster | None:
+        return db.query(MessageCluster).filter(MessageCluster.id == cluster_id).first()
+
+    @staticmethod
+    def approve_cluster_template(
+        db: Session,
+        cluster_id: str,
+        user_id: str,
+        template_approved: str | None = None,
+    ) -> MessageCluster | None:
+        cluster = DraftService.get_message_cluster(db, cluster_id)
+        if not cluster:
+            return None
+        if cluster.user_id != user_id:
+            raise ValueError("Unauthorized: Cluster belongs to different user")
+
+        cluster.template_approved = (template_approved or cluster.template_draft).strip()
+        cluster.status = "approved"
+        cluster.approved_at = datetime.now(UTC).replace(tzinfo=None)
+        db.add(cluster)
+        db.commit()
+        db.refresh(cluster)
+        return cluster
