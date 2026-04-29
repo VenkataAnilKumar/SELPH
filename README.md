@@ -14,15 +14,13 @@
 **The AI that doesn't just help you — it becomes you.**
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](.)
-[![Phases](https://img.shields.io/badge/phases%20shipped-9%2F9-blue?style=flat-square)](.)
-[![Readiness](https://img.shields.io/badge/build%20readiness-82%2F100-yellow?style=flat-square)](docs/06-implementation/BUILD_READINESS_SCORECARD.md)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square)](.)
 [![Stack](https://img.shields.io/badge/stack-FastAPI%20%7C%20LangGraph%20%7C%20pgvector-orange?style=flat-square)](docs/05-technical/SELPH_System-Architecture.md)
 [![LLMs](https://img.shields.io/badge/LLMs-140%2B%20via%20LiteLLM-red?style=flat-square)](.)
 
 > *"In the future, everyone will have a digital twin. Not a chatbot. Not an assistant. A second self."*
 
-**[See the Demo →](DEMO.md)** · **[Architecture](docs/05-technical/SELPH_System-Architecture.md)** · **[API Docs](docs/05-technical/SELPH_API-Design.md)** · **[Investor One-Pager](docs/06-implementation/INVESTOR_ONE_PAGER.md)**
+**[See the Demo →](DEMO.md)** · **[Architecture](docs/05-technical/SELPH_System-Architecture.md)** · **[API Docs](docs/05-technical/SELPH_API-Design.md)**
 
 </div>
 
@@ -75,20 +73,20 @@ Generic AI assistants complete tasks. **SELPH represents you.**
 │                   YOUR IDENTITY                          │
 │                                                          │
 │  Voice Clone    →  Sounds like you (accent, pace, warmth)│
-│  Avatar Clone   →  Looks like you (face, expressions)    │
-│  Mind Clone     →  Thinks like you (style, expertise)    │
-│  Data Layer     →  Knows your context (files, history)   │
+│  Avatar Clone   →  Looks like you (face, expressions)   │
+│  Mind Clone     →  Thinks like you (style, expertise)   │
+│  Data Layer     →  Knows your context (topics, history) │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### The Twin Engine Pipeline
+### The Twin Engine
 
 ```
 Incoming message
       │
       ▼
   Context Loader
-  ├─ Your identity profile + pgvector embeddings
+  ├─ Your identity profile + semantic embeddings
   ├─ Active Twin Briefings ("I'm at a conference this week")
   ├─ Sender Tier (VIP → bypass twin / Priority → always review)
   └─ Recent conversation history
@@ -123,24 +121,48 @@ Both modes are selectable per conversation or per channel.
 
 ---
 
-## What Has Been Shipped — All 9 Phases
+## What's Been Built
 
-> This is not a prototype. Every phase is implemented, tested, and merged to main.
+> This is a working product — not a prototype. Every feature below is implemented, tested, and shipped.
 
-| Phase | What Ships |
-|---|---|
-| **Phase 0** ✅ | Foundation — FastAPI + PostgreSQL + Redis + Celery + JWT auth |
-| **Phase 1** ✅ | Identity Core — twin profiles, topic boundaries, onboarding, identity verification |
-| **Phase 2** ✅ | Twin Engine — context loading, prompt building, draft generation, confidence scoring |
-| **Phase 3** ✅ | Human Loop — approve/edit/reject, push notifications, twin learning from feedback |
-| **Phase 4** ✅ | Channels UI — settings, onboarding flow, channel management, mobile dashboard |
-| **Phase 5** ✅ | OAuth Ingestion — Instagram DMs + Gmail (OAuth, webhooks, full message pipeline) |
-| **Phase 6** ✅ | Voice Clone — Chatterbox (MIT/free) + ElevenLabs (paid optional); consent + enrollment + synthesis |
-| **Phase 7** ✅ | Avatar Clone — Linly-Talker/Duix-Avatar (MIT/free) + HeyGen (paid optional); consent + generation |
-| **Phase 8** ✅ | Quality & Analytics — approval rates, weekly digest, performance summary, creator referral program |
-| **Phase 9** ✅ | Advanced — Twin Briefing, VIP Sender Tiers, Batch Pattern Approval, Batch Personalization render |
+**Identity & Onboarding**
+- Twin profile with domain, tone, vocabulary, and communication style
+- Topic expertise model — twin knows what you know and how confident you are
+- Identity verification and consent architecture per channel and feature
+- Onboarding status tracking and iterative profile refinement
 
-**Build Readiness: 82/100** — demo-ready, controlled pilot next.
+**Twin Engine**
+- Context loading with semantic search across your identity profile
+- Channel-aware prompt building (Instagram vs Gmail behave differently)
+- Confidence scoring on every draft — low confidence always escalates to you
+- Content moderation on all outputs, always on
+
+**Human-in-the-Loop Approval**
+- Approve, edit, or reject any draft in one tap
+- Rejection reasons feed back into the twin — it learns what you don't sound like
+- Push notifications with draft previews
+- Emergency pause from the home screen
+
+**Voice & Avatar**
+- Voice clone using Chatterbox (MIT, free by default) or ElevenLabs (paid optional)
+- Avatar generation using open-source providers (free default) or HeyGen (paid optional)
+- Consent and enrollment flow for both; assets stored in encrypted cloud storage
+
+**Advanced Features**
+- **Twin Briefing** — inject real-time context into every draft (conference week, availability, opinions)
+- **VIP Sender Tiers** — route your most important people directly to you, bypassing the twin
+- **Batch Pattern Approval** — cluster similar messages, approve 50 personalized replies in one tap
+- **Batch Personalization** — each approved batch reply is uniquely tailored per sender
+
+**Channels (Live)**
+- Instagram DMs — OAuth + webhook pipeline
+- Gmail — OAuth + push subscription pipeline
+
+**Analytics & Quality**
+- Approval rate tracking (your north star metric)
+- Weekly digest — messages handled, time saved, top topics
+- Performance summary and quality trend over time
+- Creator referral program
 
 ---
 
@@ -148,49 +170,48 @@ Both modes are selectable per conversation or per channel.
 
 ### 1. Twin Briefing — Real-Time Context Injection
 
-Tell your twin something that matters right now. It knows this for every response until it expires.
+Tell your twin something that matters right now. Every draft reflects it until it expires.
 
-```python
-POST /v1/twin/briefings
+```json
+POST /v1/identity/briefings
 {
   "type": "availability",
   "content": "I'm at a conference this week. Keep replies brief and offer a call next week.",
   "expires_at": "2026-05-05T00:00:00Z"
 }
-# Every draft your twin generates this week will reflect this context.
-# No prompt engineering. No remembering to add context. It just knows.
 ```
 
 Briefing types: `fact` · `opinion` · `instruction` · `availability` · `boundary`
-Max 10 active briefings per user. Expiry by date or usage count.
+
+No prompt engineering. No remembering to add context. Your twin just knows.
 
 ---
 
 ### 2. VIP Sender Tiers — Your Twin Knows Who Matters
 
 ```
-Tier 0  VIP      →  Message routes straight to you. Twin never sees it.
+Tier 0  VIP      →  Routes straight to you. Twin never sees it.
 Tier 1  Priority →  Twin drafts, but you always review — no auto-send ever.
 Tier 2  Standard →  Normal twin flow. Approve in one tap.
 Tier 3  Cold     →  Twin filters and handles; minimal attention needed.
 ```
 
-Your closest relationships bypass the twin completely. Your twin suggests tier upgrades as trust builds.
+Your closest relationships bypass the twin entirely. The twin suggests tier upgrades as trust builds.
 
 ---
 
 ### 3. Batch Pattern Approval — 50 Replies in One Tap
 
 ```
-50 fans ask your skincare routine in the same week
+50 fans ask the same question this week
         ↓
 SELPH clusters them semantically
         ↓
-Generates 1 template + 50 personalized replies ("Love your question, @username!")
+Generates 1 template + 50 personalized replies
         ↓
-You see: "47 similar messages. Template preview → Approve All"
+You see: "47 similar messages. Preview → Approve All"
         ↓
-Tap. Done. 47 people get personal replies. You spent 4 seconds.
+Tap. Done. 47 people get personal replies. 4 seconds of your time.
         ↓
 Per-sender exclusions available. Full audit log per batch.
 ```
@@ -203,32 +224,28 @@ No other digital twin product solves creator-scale approval fatigue.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  AI Layer                                                            │
-│  LiteLLM Gateway → 140+ models, BYOK, cost tracking, fallback       │
+│  AI                                                                  │
+│  140+ LLM providers via LiteLLM — BYOK, cost tracking, fallback     │
 │  Default: claude-sonnet-4-6 | Also: GPT-5, Gemini, DeepSeek,       │
-│           Llama via Ollama (zero cost, local), Mistral              │
-│  Orchestration: LangGraph (human-in-the-loop StateGraph)            │
-│  Voice: Chatterbox MIT (default, free) / ElevenLabs (paid optional) │
-│  Avatar: Linly-Talker/Duix-Avatar MIT (default) / HeyGen (paid)    │
+│           local models via Ollama (zero API cost), Mistral          │
+│  Orchestration: LangGraph (human-in-the-loop, interruptible)        │
+│  Voice: open-source MIT default / ElevenLabs paid optional          │
+│  Avatar: open-source MIT default / HeyGen paid optional             │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Backend                                                             │
-│  FastAPI + Celery on Railway                                         │
-│  PostgreSQL + pgvector (identity embeddings + semantic search)       │
-│  Redis (identity cache + LangGraph interrupted state)               │
-│  Cloudflare R2 (voice + avatar asset storage)                       │
+│  Python + FastAPI · async task queue · PostgreSQL + pgvector        │
+│  Semantic identity search · encrypted asset storage · WebSocket     │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Frontend                                                            │
-│  Web App: Next.js 15 on Vercel                                      │
+│  Web dashboard: Next.js 15 (App Router)                             │
 │  Mobile: React Native (iOS + Android)                               │
-│  DNS + WAF: Cloudflare                                              │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Channels (live)                                                     │
-│  Instagram DMs · Gmail                                               │
-│  (Twitter/X, WhatsApp, Slack, GitHub — Phase 2)                     │
+│  Channels                                                            │
+│  Instagram DMs · Gmail · (Twitter/X, WhatsApp, Slack, GitHub next) │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Compliance                                                          │
 │  C2PA watermarking · E2E encryption · GDPR · CCPA                  │
-│  EU AI Act · India IT Rules · SOC 2 path (audit Month 3)           │
+│  EU AI Act · India IT Rules · SOC 2 audit in progress              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -237,22 +254,22 @@ No other digital twin product solves creator-scale approval fatigue.
 ## Quick Start
 
 ```bash
-# 1. Clone
+# Clone
 git clone https://github.com/VenkataAnilKumar/selph.git
 cd selph
 
-# 2. Configure
+# Configure
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY (or any LiteLLM-supported key)
+# Add your LLM API key (Anthropic, OpenAI, or any LiteLLM-supported provider)
 
-# 3. Start
+# Start
 docker compose up --build
 
-# API live at http://localhost:8000
-# Interactive API docs at http://localhost:8000/docs
+# API → http://localhost:8000
+# Interactive docs → http://localhost:8000/docs
 ```
 
-**Full demo walkthrough with curl commands → [DEMO.md](DEMO.md)**
+**End-to-end demo with curl commands → [DEMO.md](DEMO.md)**
 
 ---
 
@@ -262,25 +279,24 @@ docker compose up --build
 selph/
 ├── src/
 │   ├── backend/app/
-│   │   ├── routers/       auth, twin, drafts, messages, channels, identity, referrals
-│   │   ├── services/      twin_engine, draft, identity, auth, moderation, twin_learning
-│   │   ├── models/        user, twin, message, draft, identity_profile, briefing, sender_tier,
-│   │   │                  message_cluster, batch_send, audit_log, consent, channel_credential
-│   │   ├── channels/      gmail, instagram (OAuth + webhook adapters)
-│   │   ├── voice/         chatterbox, elevenlabs providers (registry pattern)
-│   │   ├── avatar/        linly-talker, heygen providers (registry pattern)
-│   │   └── tasks/         draft_generation, voice_synthesis, avatar_generation, push_notifications
-│   ├── web/               Next.js dashboard (Vercel)
-│   └── mobile/            React Native app (iOS + Android)
+│   │   ├── routers/    auth, twin, drafts, messages, channels, identity, referrals
+│   │   ├── services/   twin_engine, draft, identity, moderation, twin_learning
+│   │   ├── models/     user, twin, message, draft, identity_profile, briefing,
+│   │   │               sender_tier, message_cluster, batch_send, audit_log, consent
+│   │   ├── channels/   gmail, instagram (OAuth + webhook adapters)
+│   │   ├── voice/      provider registry (open-source + paid options)
+│   │   ├── avatar/     provider registry (open-source + paid options)
+│   │   └── tasks/      draft generation, voice synthesis, avatar generation, push notifications
+│   ├── web/            Next.js dashboard
+│   └── mobile/         React Native app (iOS + Android)
 ├── docs/
-│   ├── 01-product/        PRD, product vision
-│   ├── 02-market/         validation, feature expansion
-│   ├── 03-specs/          twin engine spec, identity model spec, feature expansion spec
-│   ├── 04-safety/         risk mitigation, privacy, canonical policy matrix
-│   ├── 05-technical/      system architecture, database schema, API design
-│   └── 06-implementation/ MVP build plan, sprint plan, readiness scorecard, investor one-pager
-├── docker-compose.yml     One command to run everything locally
-└── DEMO.md                Step-by-step demo with live API calls
+│   ├── 01-product/     product vision, PRD
+│   ├── 02-market/      market validation, feature expansion research
+│   ├── 03-specs/       twin engine, identity model, feature specs
+│   ├── 04-safety/      risk, privacy consent, policy matrix
+│   └── 05-technical/   system architecture, database schema, API design
+├── docker-compose.yml  One command local setup
+└── DEMO.md             Live API walkthrough
 ```
 
 ---
@@ -303,50 +319,18 @@ cd src/mobile && npm install && npm run test
 
 ---
 
-## Deployment
-
-```bash
-# Backend → Railway
-railway up
-
-# Web + Landing → Vercel (auto-deploys on push to main via GitHub Actions)
-git push origin main
-```
-
----
-
 ## Business Model
 
 | Tier | Price | Who | What |
 |---|---|---|---|
 | **Free** | $0/mo | Everyone | 50 interactions/month, text twin |
 | **Creator** | $39/mo | Influencers | Voice + avatar, 500 interactions, social channels |
-| **Pro** | $99/mo | Consultants, Devs | Unlimited, all channels, private mode |
-| **Executive** | $299/mo | Leaders | Priority, advanced analytics, enterprise security |
-| **Enterprise** | Custom | Companies | Per-seat, SSO, compliance, SLA |
+| **Pro** | $99/mo | Consultants, Devs | Unlimited interactions, all channels, private mode |
+| **Executive** | $299/mo | Leaders | Priority processing, advanced analytics, enterprise security |
+| **Enterprise** | Custom | Companies | Per-seat, SSO, compliance, dedicated SLA |
 
-**North Star Metric:** Twin Approval Rate — % of drafts approved without edits.
-Higher rate = twin sounds more like you = better product = stronger moat.
-
----
-
-## Go-To-Market
-
-```
-Month 1–2   Private beta — 50 selected content creators
-            Measure approval rate. Gather testimonials.
-
-Month 3     Open waitlist. Creator referral program.
-            PR: "The first AI that IS you, not just helps you."
-
-Month 4–6   Pro tier — consultants, developers
-            GitHub, Slack, Discord integrations live.
-
-Month 7–12  Enterprise tier. SOC 2 certified.
-            Team twins. Developer API.
-```
-
-Target: **1,000 active twins by Month 5** · **10,000 by Month 9** · **$50K MRR by Month 9**
+**North Star Metric:** Twin Approval Rate — the percentage of drafts approved without edits.
+Higher = your twin sounds more like you = better product = deeper moat.
 
 ---
 
@@ -359,9 +343,9 @@ Target: **1,000 active twins by Month 5** · **10,000 by Month 9** · **$50K MRR
 | No personality | **Your personality** |
 | Same output for everyone | **Unique to every user** |
 | No trust model | **Graduated trust — earned over time** |
-| Fragmented (chat / voice / avatar separately) | **Unified identity twin** |
+| Fragmented point solutions | **Unified identity twin** |
 | Reactive only | **Proactive — surfaces what you'd miss** |
-| No creator scale | **Batch Pattern Approval — 50 replies in one tap** |
+| Breaks at creator scale | **Batch Pattern Approval — 50 replies in one tap** |
 
 ---
 
@@ -378,33 +362,7 @@ SELPH is built trust-first, not growth-first.
 - **Compliant from day 1** — GDPR, CCPA, EU AI Act, India IT Rules
 - **VIP bypass** — your most important relationships never touch the twin
 
-The canonical policy source of truth: [SELPH_Canonical-Policy-Matrix.md](docs/04-safety/SELPH_Canonical-Policy-Matrix.md)
-
----
-
-## For Investors
-
-SELPH is building the **identity layer for AI-native communication**.
-
-- **82/100 build readiness** — not a deck, not a Figma mockup, a working system
-- **9 phases shipped** — twin engine, voice clone, avatar clone, VIP tiers, batch approval, analytics
-- **Strong moat** — identity models are personal, sticky, and continuously self-improving
-- **Regulatory tailwind** — transparent AI interaction is what regulators want to see
-- **Viral by design** — "I have a digital twin" is a 2026 status signal
-
-[Read the full investor one-pager →](docs/06-implementation/INVESTOR_ONE_PAGER.md)
-
----
-
-## For Developers
-
-- **140+ LLM providers** via LiteLLM — BYOK or use defaults
-- **OpenAPI docs** at `/docs` — fully typed, versioned endpoints
-- **Webhook-ready** — Instagram and Gmail adapters included and tested
-- **Registry pattern** — add new voice/avatar/channel providers without touching core logic
-- **LangGraph StateGraph** — fully inspectable, interruptible, resumable twin pipeline
-
-[Full API design →](docs/05-technical/SELPH_API-Design.md)
+Policy decisions: [SELPH_Canonical-Policy-Matrix.md](docs/04-safety/SELPH_Canonical-Policy-Matrix.md)
 
 ---
 
@@ -412,32 +370,14 @@ SELPH is building the **identity layer for AI-native communication**.
 
 | Document | What It Contains |
 |---|---|
-| [Product Vision](docs/01-product/PRODUCT_IDEA.md) | The idea, identity layers, operating modes, GTM waves |
-| [PRD](docs/01-product/PRD.md) | Goals, user stories, features, business model |
+| [Product Vision](docs/01-product/PRODUCT_IDEA.md) | The idea, identity layers, operating modes |
+| [PRD](docs/01-product/PRD.md) | Goals, user stories, full feature list, business model |
 | [System Architecture](docs/05-technical/SELPH_System-Architecture.md) | Full stack design, data flows, deployment |
-| [Database Schema](docs/05-technical/SELPH_Database-Schema.md) | All tables, relationships, pgvector design |
+| [Database Schema](docs/05-technical/SELPH_Database-Schema.md) | All tables, relationships, vector design |
 | [API Design](docs/05-technical/SELPH_API-Design.md) | Every endpoint, request/response shapes |
-| [Twin Engine Spec](docs/03-specs/SELPH_Twin-Engine-Spec.md) | LangGraph pipeline, confidence scoring, moderation |
+| [Twin Engine Spec](docs/03-specs/SELPH_Twin-Engine-Spec.md) | Pipeline design, confidence scoring, moderation |
 | [Feature Expansion Spec](docs/03-specs/SELPH_Feature-Expansion-Spec.md) | Briefing, VIP tiers, batch approval, proactive twin |
 | [Safety Policy Matrix](docs/04-safety/SELPH_Canonical-Policy-Matrix.md) | Canonical policy decisions, enforcement rules |
-| [Build Readiness Scorecard](docs/06-implementation/BUILD_READINESS_SCORECARD.md) | 82/100 score, blockers, go/no-go decisions |
-| [Investor One-Pager](docs/06-implementation/INVESTOR_ONE_PAGER.md) | Why now, competitive advantage, ask |
-
----
-
-## Environment Variables
-
-```bash
-# Backend — .env (see .env.example for all options)
-ANTHROPIC_API_KEY=sk-ant-...       # or any LiteLLM-supported key
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
-JWT_SECRET_KEY=...                  # 32+ chars in production
-FIREBASE_PROJECT_ID=selph
-
-# Web / Mobile
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
 
 ---
 
@@ -458,8 +398,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 **[Full Demo Walkthrough →](DEMO.md)**
 
 ---
-
-*Built April 2026 · All 9 phases complete · Ready for controlled creator pilot*
 
 *SELPH — **S**elf · **E**cho · **L**ive · **P**roxy · **H**uman*
 
