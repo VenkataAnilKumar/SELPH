@@ -6,7 +6,17 @@ from datetime import datetime, UTC
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import IdentityProfile, Topic, Twin, Consent, ChannelCredential, TwinBriefing, SenderTier
+from app.models import (
+    IdentityProfile,
+    Topic,
+    Twin,
+    Consent,
+    ChannelCredential,
+    TwinBriefing,
+    SenderTier,
+    IdentityVariant,
+    ChannelProfileMapping,
+)
 
 
 class IdentityService:
@@ -607,3 +617,194 @@ class IdentityService:
             SenderTier.sender_id == sender_id,
         ).first()
         return row.tier if row else 2
+
+    @staticmethod
+    def create_profile(
+        db: Session,
+        user_id: str,
+        profile_name: str,
+        profile_type: str,
+        vocabulary_description: str | None = None,
+        communication_style: str | None = None,
+    ) -> IdentityVariant:
+        existing_count = db.query(IdentityVariant).filter(
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_active.is_(True),
+        ).count()
+        if existing_count >= 5:
+            raise ValueError("Maximum 5 active profiles allowed")
+
+        is_primary = existing_count == 0
+        row = IdentityVariant(
+            user_id=user_id,
+            profile_name=profile_name,
+            profile_type=profile_type,
+            is_primary=is_primary,
+            is_active=True,
+            vocabulary_description=vocabulary_description,
+            communication_style=communication_style,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def list_profiles(db: Session, user_id: str) -> list[IdentityVariant]:
+        return (
+            db.query(IdentityVariant)
+            .filter(IdentityVariant.user_id == user_id, IdentityVariant.is_active.is_(True))
+            .order_by(IdentityVariant.is_primary.desc(), IdentityVariant.created_at.asc())
+            .all()
+        )
+
+    @staticmethod
+    def update_profile(
+        db: Session,
+        user_id: str,
+        profile_id: str,
+        profile_name: str | None = None,
+        profile_type: str | None = None,
+        vocabulary_description: str | None = None,
+        communication_style: str | None = None,
+    ) -> IdentityVariant | None:
+        row = db.query(IdentityVariant).filter(
+            IdentityVariant.id == profile_id,
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_active.is_(True),
+        ).first()
+        if not row:
+            return None
+
+        if profile_name is not None:
+            row.profile_name = profile_name
+        if profile_type is not None:
+            row.profile_type = profile_type
+        if vocabulary_description is not None:
+            row.vocabulary_description = vocabulary_description
+        if communication_style is not None:
+            row.communication_style = communication_style
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def set_primary_profile(db: Session, user_id: str, profile_id: str) -> IdentityVariant | None:
+        target = db.query(IdentityVariant).filter(
+            IdentityVariant.id == profile_id,
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_active.is_(True),
+        ).first()
+        if not target:
+            return None
+
+        db.query(IdentityVariant).filter(
+            IdentityVariant.user_id == user_id,
+        ).update({IdentityVariant.is_primary: False}, synchronize_session=False)
+
+        target.is_primary = True
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+        return target
+
+    @staticmethod
+    def deactivate_profile(db: Session, user_id: str, profile_id: str) -> bool:
+        row = db.query(IdentityVariant).filter(
+            IdentityVariant.id == profile_id,
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_active.is_(True),
+        ).first()
+        if not row:
+            return False
+
+        row.is_active = False
+        row.is_primary = False
+        db.add(row)
+
+        replacement = db.query(IdentityVariant).filter(
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_active.is_(True),
+            IdentityVariant.id != profile_id,
+        ).order_by(IdentityVariant.created_at.asc()).first()
+        if replacement:
+            replacement.is_primary = True
+            db.add(replacement)
+
+        db.commit()
+        return True
+
+    @staticmethod
+    def upsert_channel_mapping(
+        db: Session,
+        user_id: str,
+        profile_id: str,
+        channel: str,
+        platform_account: str | None,
+        priority: int = 1,
+    ) -> ChannelProfileMapping:
+        row = db.query(ChannelProfileMapping).filter(
+            ChannelProfileMapping.user_id == user_id,
+            ChannelProfileMapping.channel == channel,
+            ChannelProfileMapping.platform_account == platform_account,
+        ).first()
+        if not row:
+            row = ChannelProfileMapping(
+                user_id=user_id,
+                channel=channel,
+                platform_account=platform_account,
+            )
+
+        row.profile_id = profile_id
+        row.priority = priority
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def list_channel_mappings(db: Session, user_id: str) -> list[ChannelProfileMapping]:
+        return db.query(ChannelProfileMapping).filter(ChannelProfileMapping.user_id == user_id).order_by(
+            ChannelProfileMapping.channel.asc(),
+            ChannelProfileMapping.priority.asc(),
+        ).all()
+
+    @staticmethod
+    def delete_channel_mapping(db: Session, user_id: str, channel: str, platform_account: str | None) -> bool:
+        row = db.query(ChannelProfileMapping).filter(
+            ChannelProfileMapping.user_id == user_id,
+            ChannelProfileMapping.channel == channel,
+            ChannelProfileMapping.platform_account == platform_account,
+        ).first()
+        if not row:
+            return False
+        db.delete(row)
+        db.commit()
+        return True
+
+    @staticmethod
+    def resolve_profile_for_channel(
+        db: Session,
+        user_id: str,
+        channel: str,
+        platform_account: str | None,
+    ) -> IdentityVariant | None:
+        mapping = db.query(ChannelProfileMapping).filter(
+            ChannelProfileMapping.user_id == user_id,
+            ChannelProfileMapping.channel == channel,
+            ChannelProfileMapping.platform_account == platform_account,
+        ).first()
+        if mapping:
+            return db.query(IdentityVariant).filter(
+                IdentityVariant.id == mapping.profile_id,
+                IdentityVariant.user_id == user_id,
+                IdentityVariant.is_active.is_(True),
+            ).first()
+
+        return db.query(IdentityVariant).filter(
+            IdentityVariant.user_id == user_id,
+            IdentityVariant.is_primary.is_(True),
+            IdentityVariant.is_active.is_(True),
+        ).first()

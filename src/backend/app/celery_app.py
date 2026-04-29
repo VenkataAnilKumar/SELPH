@@ -3,6 +3,7 @@ Celery app configuration and initialization
 """
 
 from celery import Celery
+from celery.schedules import crontab
 from app.config import get_settings
 
 settings = get_settings()
@@ -27,6 +28,24 @@ celery_app.conf.update(
     worker_prefetch_multiplier=4,
     worker_max_tasks_per_child=1000,
     result_expires=3600,  # Results expire in 1 hour
+    beat_schedule={
+        "proactive-scan-every-6h": {
+            "task": "tasks.run_proactive_scan",
+            "schedule": crontab(minute=0, hour="*/6"),
+        },
+        "surge-check-every-15m": {
+            "task": "tasks.run_surge_check",
+            "schedule": crontab(minute="*/15"),
+        },
+        "style-evolution-quarterly": {
+            "task": "tasks.run_style_evolution",
+            "schedule": crontab(minute=0, hour=0, day_of_month="1", month_of_year="*/3"),
+        },
+        "t2t-maintenance-hourly": {
+            "task": "tasks.run_t2t_maintenance",
+            "schedule": crontab(minute=0),
+        },
+    },
 )
 
 # Auto-discover tasks from tasks module

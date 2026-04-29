@@ -11,6 +11,8 @@ from app.config import get_settings
 from app.models import Message
 from app.services import DraftService, TwinEngineService
 from app.services.identity import IdentityService
+from app.services.crisis import CrisisService
+from app.services.privacy import PrivacyService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,24 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
                 sender_id=message.sender_id,
                 platform=message.channel,
             )
+
+            # Phase 10 crisis mode guardrails.
+            operating_mode = CrisisService.get_twin_mode(db, user_id)
+            if operating_mode == "manual_pause":
+                return {
+                    "status": "success",
+                    "routing_action": "skipped_manual_pause",
+                    "reason": "twin_paused",
+                    "tier": sender_tier,
+                }
+
+            if operating_mode == "crisis_mode":
+                return {
+                    "status": "success",
+                    "routing_action": "use_crisis_template",
+                    "reason": "crisis_mode_active",
+                    "tier": sender_tier,
+                }
 
             # Tier 0 (VIP): bypass twin and notify user directly.
             if sender_tier == 0:
@@ -106,6 +126,10 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
                 estimated_output_tokens=pipeline.get("estimated_output_tokens"),
                 estimated_total_tokens=pipeline.get("estimated_total_tokens"),
                 estimated_cost_usd=pipeline.get("estimated_cost_usd"),
+                force_review=(
+                    operating_mode == "crisis_alert"
+                    or PrivacyService.get_or_create_settings(db, user_id).processing_mode in {"on_device", "hybrid"}
+                ),
             )
             
             # Mark message as draft_ready

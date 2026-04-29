@@ -17,6 +17,17 @@ from app.models.twin_briefing import TwinBriefing
 from app.models.sender_tier import SenderTier
 from app.models.message_cluster import MessageCluster
 from app.models.batch_send import BatchSend
+from app.models.proactive_suggestion import ProactiveSuggestion
+from app.models.proactive_preference import ProactivePreference
+from app.models.surge_event import SurgeEvent
+from app.models.crisis_template import CrisisTemplate
+from app.models.identity_variant import IdentityVariant
+from app.models.channel_profile_mapping import ChannelProfileMapping
+from app.models.style_checkpoint import StyleCheckpoint
+from app.models.twin_certificate import TwinCertificate
+from app.models.verification_log import VerificationLog
+from app.models.user_privacy_settings import UserPrivacySettings
+from app.models.t2t_session import T2TSession
 
 __all__ = [
     "Base",
@@ -35,4 +46,15 @@ __all__ = [
     "SenderTier",
     "MessageCluster",
     "BatchSend",
+    "ProactiveSuggestion",
+    "ProactivePreference",
+    "SurgeEvent",
+    "CrisisTemplate",
+    "IdentityVariant",
+    "ChannelProfileMapping",
+    "StyleCheckpoint",
+    "TwinCertificate",
+    "VerificationLog",
+    "UserPrivacySettings",
+    "T2TSession",
 ]

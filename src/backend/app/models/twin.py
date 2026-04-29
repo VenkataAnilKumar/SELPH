@@ -17,6 +17,7 @@ class Twin(BaseModel):
     vocab = Column(JSON, default=list, nullable=False)  # List of tone/vocabulary keywords
     avg_response_length = Column(Integer, default=150, nullable=False)  # average words
     status = Column(String, default="active", nullable=False)  # "active" or "paused"
+    twin_operating_mode = Column(String, default="normal", nullable=False)  # normal, crisis_alert, crisis_mode, manual_pause
     
     # Relationships
     user = relationship("User", back_populates="twin")

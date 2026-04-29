@@ -23,6 +23,18 @@ from app.tasks.voice_synthesis import (
 from app.tasks.avatar_generation import (
     generate_avatar,
 )
+from app.tasks.proactive_scan import (
+    run_proactive_scan,
+)
+from app.tasks.surge_check import (
+    run_surge_check,
+)
+from app.tasks.style_evolution import (
+    run_style_evolution,
+)
+from app.tasks.t2t_negotiation import (
+    run_t2t_maintenance,
+)
 
 __all__ = [
     "generate_draft_for_message",
@@ -32,4 +44,8 @@ __all__ = [
     "send_channel_reply",
     "synthesize_voice",
     "generate_avatar",
+    "run_proactive_scan",
+    "run_surge_check",
+    "run_style_evolution",
+    "run_t2t_maintenance",
 ]

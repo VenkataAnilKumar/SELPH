@@ -75,6 +75,7 @@ class DraftService:
         estimated_output_tokens: int = None,
         estimated_total_tokens: int = None,
         estimated_cost_usd: float = None,
+        force_review: bool = False,
     ) -> Draft:
         """
         Create a new draft response
@@ -111,6 +112,7 @@ class DraftService:
             estimated_output_tokens=estimated_output_tokens,
             estimated_total_tokens=estimated_total_tokens,
             estimated_cost_usd=estimated_cost_usd,
+            force_review=force_review,
             status="pending_approval",
         )
         
@@ -132,6 +134,12 @@ class DraftService:
         
         draft.status = "approved"
         draft.user_action = "approve"
+
+        from app.services.verification import VerificationService
+        cert = VerificationService.issue_certificate(db, user_id)
+        content_hash = DraftService._hash_payload(draft.content)
+        draft.selph_twin_id = cert.twin_public_id
+        draft.selph_signature = VerificationService.sign_message(cert.private_key_ref, content_hash)
         
         # Log action
         audit = AuditLog(
@@ -197,6 +205,12 @@ class DraftService:
         draft.edited_content = edited_content
         draft.status = "edited"
         draft.user_action = "edit"
+
+        from app.services.verification import VerificationService
+        cert = VerificationService.issue_certificate(db, user_id)
+        content_hash = DraftService._hash_payload(edited_content)
+        draft.selph_twin_id = cert.twin_public_id
+        draft.selph_signature = VerificationService.sign_message(cert.private_key_ref, content_hash)
         
         # Log action
         audit = AuditLog(
@@ -349,6 +363,12 @@ class DraftService:
         fingerprint = "|".join(sorted(set(key_tokens)))
         label = " ".join(tokens[:3]).strip()
         return fingerprint, label.title() if label else "General questions"
+
+    @staticmethod
+    def _hash_payload(text: str) -> str:
+        import hashlib
+
+        return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
     @staticmethod
     def _pending_drafts_for_batch(db: Session, user_id: str, channel: str | None = None) -> list[Draft]:

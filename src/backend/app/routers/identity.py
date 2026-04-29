@@ -35,6 +35,15 @@ from app.schemas.identity import (
     SenderTierListResponse,
     RESPONSE_LENGTH_MAP,
 )
+from app.schemas.identity_profiles import (
+    IdentityVariantCreateRequest,
+    IdentityVariantUpdateRequest,
+    IdentityVariantResponse,
+    IdentityVariantListResponse,
+    ChannelProfileMappingUpsertRequest,
+    ChannelProfileMappingResponse,
+    ChannelProfileMappingListResponse,
+)
 from typing import List
 
 router = APIRouter(tags=["Identity"])
@@ -683,3 +692,116 @@ async def clear_avatar_profile(
         avatar_sample_url=profile.avatar_sample_url,
         consent_granted=consent_granted,
     )
+
+
+# ── Multi-Identity Profiles (Phase 10) ─────────────────────────────────────
+
+@router.get("/profiles", response_model=IdentityVariantListResponse)
+async def list_profiles(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = IdentityService.list_profiles(db, current_user.id)
+    return IdentityVariantListResponse(total=len(rows), items=[IdentityVariantResponse.model_validate(r) for r in rows])
+
+
+@router.post("/profiles", response_model=IdentityVariantResponse, status_code=status.HTTP_201_CREATED)
+async def create_profile(
+    request: IdentityVariantCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = IdentityService.create_profile(
+            db,
+            user_id=current_user.id,
+            profile_name=request.profile_name,
+            profile_type=request.profile_type,
+            vocabulary_description=request.vocabulary_description,
+            communication_style=request.communication_style,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return IdentityVariantResponse.model_validate(row)
+
+
+@router.patch("/profiles/{profile_id}", response_model=IdentityVariantResponse)
+async def update_profile(
+    profile_id: str,
+    request: IdentityVariantUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = IdentityService.update_profile(
+        db,
+        user_id=current_user.id,
+        profile_id=profile_id,
+        profile_name=request.profile_name,
+        profile_type=request.profile_type,
+        vocabulary_description=request.vocabulary_description,
+        communication_style=request.communication_style,
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    return IdentityVariantResponse.model_validate(row)
+
+
+@router.delete("/profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_profile(
+    profile_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    deleted = IdentityService.deactivate_profile(db, current_user.id, profile_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+
+@router.post("/profiles/{profile_id}/primary", response_model=IdentityVariantResponse)
+async def set_primary_profile(
+    profile_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = IdentityService.set_primary_profile(db, current_user.id, profile_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    return IdentityVariantResponse.model_validate(row)
+
+
+@router.get("/channel-mappings", response_model=ChannelProfileMappingListResponse)
+async def list_channel_mappings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = IdentityService.list_channel_mappings(db, current_user.id)
+    return ChannelProfileMappingListResponse(total=len(rows), items=[ChannelProfileMappingResponse.model_validate(r) for r in rows])
+
+
+@router.put("/channel-mappings", response_model=ChannelProfileMappingResponse)
+async def upsert_channel_mapping(
+    request: ChannelProfileMappingUpsertRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = IdentityService.upsert_channel_mapping(
+        db,
+        user_id=current_user.id,
+        profile_id=request.profile_id,
+        channel=request.channel,
+        platform_account=request.platform_account,
+        priority=request.priority,
+    )
+    return ChannelProfileMappingResponse.model_validate(row)
+
+
+@router.delete("/channel-mappings/{channel}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_channel_mapping(
+    channel: str,
+    platform_account: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    deleted = IdentityService.delete_channel_mapping(db, current_user.id, channel, platform_account)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapping not found")

@@ -52,6 +52,41 @@ from app.schemas.channels import (
     ChannelConnectResponse,
     ConnectedChannelResponse,
 )
+from app.schemas.proactive import (
+    ProactiveSuggestionResponse,
+    ProactiveSuggestionListResponse,
+    SuggestionActRequest,
+    ProactivePreferenceResponse,
+    ProactivePreferenceUpdateRequest,
+)
+from app.schemas.crisis import (
+    SurgeStatusResponse,
+    CrisisActivateRequest,
+    CrisisResolveRequest,
+    CrisisTemplateCreateRequest,
+    CrisisTemplateResponse,
+    CrisisTemplateListResponse,
+)
+from app.schemas.style import (
+    StyleCheckpointResponse,
+    StyleCheckpointListResponse,
+    StyleDecisionRequest,
+)
+from app.schemas.verification import (
+    CertificateResponse,
+    VerificationResultResponse,
+    CertificateMetadataResponse,
+)
+from app.schemas.privacy import (
+    PrivacySettingsResponse,
+    PrivacySettingsUpdateRequest,
+    PrivacyCapabilityRequest,
+    PrivacyCapabilityResponse,
+)
+from app.schemas.t2t import (
+    T2TSessionResponse,
+    T2TSessionListResponse,
+)
 
 __all__ = [
     # Auth
@@ -98,4 +133,33 @@ __all__ = [
     "ChannelConnectRequest",
     "ChannelConnectResponse",
     "ConnectedChannelResponse",
+    # Proactive
+    "ProactiveSuggestionResponse",
+    "ProactiveSuggestionListResponse",
+    "SuggestionActRequest",
+    "ProactivePreferenceResponse",
+    "ProactivePreferenceUpdateRequest",
+    # Crisis
+    "SurgeStatusResponse",
+    "CrisisActivateRequest",
+    "CrisisResolveRequest",
+    "CrisisTemplateCreateRequest",
+    "CrisisTemplateResponse",
+    "CrisisTemplateListResponse",
+    # Style
+    "StyleCheckpointResponse",
+    "StyleCheckpointListResponse",
+    "StyleDecisionRequest",
+    # Verification
+    "CertificateResponse",
+    "VerificationResultResponse",
+    "CertificateMetadataResponse",
+    # Privacy
+    "PrivacySettingsResponse",
+    "PrivacySettingsUpdateRequest",
+    "PrivacyCapabilityRequest",
+    "PrivacyCapabilityResponse",
+    # T2T
+    "T2TSessionResponse",
+    "T2TSessionListResponse",
 ]

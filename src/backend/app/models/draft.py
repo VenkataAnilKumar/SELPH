@@ -41,6 +41,9 @@ class Draft(BaseModel):
     estimated_output_tokens = Column(Integer, nullable=True)
     estimated_total_tokens = Column(Integer, nullable=True)
     estimated_cost_usd = Column(Float, nullable=True)
+    selph_signature = Column(Text, nullable=True)
+    selph_twin_id = Column(String, nullable=True)
+    force_review = Column(Boolean, default=False, nullable=False)
 
     # Voice synthesis (Phase 6)
     voice_status = Column(String, default="not_requested", nullable=False)
