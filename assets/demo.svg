@@ -1,0 +1,158 @@
+<svg width="800" height="480" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg"
+     font-family="'Courier New',Courier,monospace">
+<style>
+/* 12-second infinite loop
+   Each element: invisible → fades in at its moment → stays → fades out at 84% → resets */
+
+@keyframes l1  {0%,3%{opacity:0}  5.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l2  {0%,9%{opacity:0}  11.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l3  {0%,13%{opacity:0} 15.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l4  {0%,18%{opacity:0} 20.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l5  {0%,22%{opacity:0} 24.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l6  {0%,26%{opacity:0} 28.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l7  {0%,29%{opacity:0} 31.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l8  {0%,32%{opacity:0} 34.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l9  {0%,35%{opacity:0} 37.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l10 {0%,38%{opacity:0} 40.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes l11 {0%,41%{opacity:0} 43.5%{opacity:1} 84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes lbtn{0%,49%{opacity:0} 53%{opacity:1}   84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+@keyframes lsuc{0%,61%{opacity:0} 65%{opacity:1}   84%{opacity:1} 96%{opacity:0} 100%{opacity:0}}
+
+@keyframes blink{0%,44%,56%,100%{opacity:1} 50%{opacity:0}}
+
+/* Approve button green flash at ~57% (6.8s) */
+@keyframes apprvRect{
+  0%,51%{fill:#166534} 57%{fill:#16a34a} 62%{fill:#22c55e} 67%,100%{fill:#166534}
+}
+@keyframes apprvText{
+  0%,51%{fill:#4ade80} 62%{fill:#ffffff} 67%,100%{fill:#4ade80}
+}
+
+.l1  {animation:l1   12s infinite; opacity:0}
+.l2  {animation:l2   12s infinite; opacity:0}
+.l3  {animation:l3   12s infinite; opacity:0}
+.l4  {animation:l4   12s infinite; opacity:0}
+.l5  {animation:l5   12s infinite; opacity:0}
+.l6  {animation:l6   12s infinite; opacity:0}
+.l7  {animation:l7   12s infinite; opacity:0}
+.l8  {animation:l8   12s infinite; opacity:0}
+.l9  {animation:l9   12s infinite; opacity:0}
+.l10 {animation:l10  12s infinite; opacity:0}
+.l11 {animation:l11  12s infinite; opacity:0}
+.lbtn{animation:lbtn 12s infinite; opacity:0}
+.lsuc{animation:lsuc 12s infinite; opacity:0}
+.cur {animation:blink 1.2s 0.6s infinite}
+.ar  {animation:apprvRect 12s infinite}
+.at  {animation:apprvText 12s infinite}
+</style>
+
+<!-- Page background -->
+<rect width="800" height="480" fill="#06060e"/>
+
+<!-- Terminal window glow -->
+<rect x="28" y="12" width="744" height="456" rx="14" fill="#6366f1" opacity="0.035"/>
+
+<!-- Terminal window -->
+<rect x="32" y="16" width="736" height="448" rx="12" fill="#0c0c1a" stroke="#1c1c34" stroke-width="1"/>
+
+<!-- Title bar -->
+<rect x="32" y="16" width="736" height="38" rx="12" fill="#121228"/>
+<rect x="32" y="40"  width="736" height="14" fill="#121228"/>
+
+<!-- Traffic lights -->
+<circle cx="60"  cy="35" r="5.5" fill="#ff5f57"/>
+<circle cx="79"  cy="35" r="5.5" fill="#febc2e"/>
+<circle cx="98"  cy="35" r="5.5" fill="#28c840"/>
+
+<!-- Window title -->
+<text x="400" y="35" text-anchor="middle" dominant-baseline="middle"
+      font-family="system-ui,-apple-system,sans-serif"
+      font-size="11" fill="rgba(255,255,255,0.28)" letter-spacing="0.5">SELPH — Twin Engine</text>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     CONTENT  (x=64, line-height ~19px)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+<!-- L1: Header -->
+<text class="l1" x="64" y="78" font-size="13" fill="#818cf8" font-weight="bold">
+  &#x25B8;  SELPH  Twin Engine  ·  v0.9.0
+</text>
+<line class="l1" x1="64" y1="90" x2="736" y2="90" stroke="rgba(99,102,241,0.18)" stroke-width="1"/>
+
+<!-- L2: Incoming message header -->
+<text class="l2" x="64" y="113" font-size="12.5">
+  <tspan fill="rgba(255,255,255,0.32)">  incoming  </tspan><tspan fill="#f97316" font-weight="bold">instagram_dm</tspan><tspan fill="rgba(255,255,255,0.32)">  ·  from  </tspan><tspan fill="#fb923c">@techgirl2026</tspan>
+</text>
+
+<!-- L3: Original message -->
+<text class="l3" x="64" y="131" font-size="11" fill="rgba(255,255,255,0.32)" font-style="italic">
+  &#160;&#160;"Your talk on agentic AI blew my mind. How do you stay ahead without getting overwhelmed?"
+</text>
+
+<!-- L4: Identity model -->
+<text class="l4" x="64" y="162" font-size="12.5">
+  <tspan fill="rgba(255,255,255,0.42)">  &#x25C8;  identity model &#160;&#160;&#160;&#160;&#160;</tspan><tspan fill="#22c55e">&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;  loaded</tspan>
+</text>
+
+<!-- L5: Briefing -->
+<text class="l5" x="64" y="181" font-size="12.5">
+  <tspan fill="rgba(255,255,255,0.42)">  &#x25C8;  briefing active  &#160;&#160;&#160;</tspan><tspan fill="#6366f1">"conference week · keep replies brief"</tspan>
+</text>
+
+<!-- L6: Sender tier -->
+<text class="l6" x="64" y="200" font-size="12.5">
+  <tspan fill="rgba(255,255,255,0.42)">  &#x25C8;  sender tier &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</tspan><tspan fill="rgba(255,255,255,0.75)">Standard</tspan><tspan fill="rgba(255,255,255,0.3)">  →  normal approval flow</tspan>
+</text>
+
+<!-- L7: Generation complete + confidence -->
+<text class="l7" x="64" y="219" font-size="12.5">
+  <tspan fill="rgba(255,255,255,0.42)">  &#x25C8;  draft generation &#160;&#160;&#160;</tspan><tspan fill="#22c55e">&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;&#xB7;  done  &#160;</tspan><tspan fill="rgba(255,255,255,0.25)"> &#160;&#160; </tspan><tspan fill="#6366f1">confidence: 92%</tspan>
+</text>
+
+<!-- Draft card border -->
+<rect class="l8" x="64" y="230" width="672" height="88" rx="7"
+      fill="rgba(99,102,241,0.055)" stroke="rgba(99,102,241,0.28)" stroke-width="1"/>
+
+<!-- Draft content lines -->
+<text class="l8" x="80" y="251" font-size="12.5" fill="rgba(255,255,255,0.88)">
+  &#160;&#160;Hey! So glad it landed well :) Honestly — I stopped trying to consume everything.
+</text>
+<text class="l9" x="80" y="270" font-size="12.5" fill="rgba(255,255,255,0.88)">
+  &#160;&#160;Pick 2-3 people whose thinking you trust and follow them closely. Less noise,
+</text>
+<text class="l10" x="80" y="289" font-size="12.5" fill="rgba(255,255,255,0.88)">
+  &#160;&#160;more signal. Happy to share who those are — call next week?
+</text>
+
+<!-- Confidence bar -->
+<text class="l11" x="64" y="332" font-size="12">
+  <tspan fill="rgba(255,255,255,0.28)">  confidence  </tspan><tspan fill="#6366f1">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</tspan><tspan fill="rgba(99,102,241,0.28)">&#x2588;&#x2588;</tspan><tspan fill="rgba(255,255,255,0.5)">  92%</tspan>
+</text>
+
+<!-- Buttons row -->
+<g class="lbtn">
+  <!-- APPROVE -->
+  <rect class="ar" x="64" y="348" width="148" height="30" rx="6" fill="#166534"/>
+  <text class="at" x="138" y="363" text-anchor="middle" dominant-baseline="middle"
+        font-size="12.5" font-weight="bold" fill="#4ade80">[ &#x2713;  APPROVE ]</text>
+
+  <!-- Edit -->
+  <rect x="222" y="348" width="80" height="30" rx="6" fill="#1a1a30" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <text x="262" y="363" text-anchor="middle" dominant-baseline="middle"
+        font-size="12.5" fill="rgba(255,255,255,0.35)">[ Edit ]</text>
+
+  <!-- Reject -->
+  <rect x="312" y="348" width="90" height="30" rx="6" fill="#1a1a30" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <text x="357" y="363" text-anchor="middle" dominant-baseline="middle"
+        font-size="12.5" fill="rgba(255,255,255,0.35)">[ Reject ]</text>
+</g>
+
+<!-- Success line -->
+<text class="lsuc" x="64" y="404" font-size="13" font-weight="bold">
+  <tspan fill="#22c55e">  &#x2713;  Approved · Reply sent · Twin learned · </tspan><tspan fill="#818cf8">Approval rate: 88%</tspan>
+</text>
+
+<!-- Blinking cursor -->
+<text class="cur" x="64" y="434" font-size="13" fill="#6366f1">  &#x258A;</text>
+
+</svg>

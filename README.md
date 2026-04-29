@@ -22,6 +22,12 @@
 
 <br/>
 
+## See It In Action
+
+![SELPH Demo](assets/demo.svg)
+
+<br/>
+
 ## Who Is This For?
 
 ![Personas](assets/personas.svg)
@@ -132,6 +138,22 @@ API live at `http://localhost:8000` · Docs at `http://localhost:8000/docs`
 
 <br/>
 
+## Contributing
+
+Contributions are by invitation only. If you're on the core team, read **[CONTRIBUTING.md](CONTRIBUTING.md)** for branch naming, commit style, PR process, and code standards.
+
+Found a bug? Open a GitHub Issue. Security vulnerabilities? Email `vanilkumarch@gmail.com` directly — do not open a public issue.
+
+<br/>
+
+## License
+
+Copyright © 2026 Venkata Anil Kumar. All rights reserved.
+
+Proprietary software — no part may be used, copied, modified, or distributed without express written permission. See **[LICENSE](LICENSE)** for full terms.
+
+<br/>
+
 ---
 
 <div align="center">
@@ -143,6 +165,13 @@ API live at `http://localhost:8000` · Docs at `http://localhost:8000/docs`
 <br/>
 
 *S · E · L · P · H — Self · Echo · Live · Proxy · Human*
+
+<br/>
+
+---
+
+*Interested in the pilot or have questions?*
+*Reach out → **[vanilkumarch@gmail.com](mailto:vanilkumarch@gmail.com)***
 
 <br/>
 
