@@ -53,3 +53,55 @@ Commands:
 - [ ] rollback plan documented
 - [ ] smoke tests pass post-deploy
 - [ ] monitoring and alerts verified for first 60 minutes
+
+---
+
+# Phase 8 Release Readiness Checklist
+
+Date: 2026-04-28
+Target Release: 0.9.0
+Branch for release candidate work: feature/phase8-pr-h
+
+## 1) Merge Train State
+
+- [ ] stacked PRs #26 through #33 merged in order
+- [ ] main branch synced after each merge
+- [ ] no unresolved review threads on Phase 8 PRs
+
+## 2) Backend Validation
+
+- [x] endpoint suite passes with Phase 8 coverage (`66 passed` at PR H)
+- [x] full backend suite passes after Phase 8 stack (`261 passed`)
+- [x] no new lint/syntax issues in changed backend files
+
+## 3) Product Readiness (Phase 8 Scope)
+
+- [x] Twin quality summary API available
+- [x] Weekly digest summary API available
+- [x] Onboarding status API available
+- [x] Referral invite/accept/summary APIs available
+- [x] Performance summary API available for <10s target tracking
+
+## 4) Operational Readiness
+
+- [x] `/ready` validates database connectivity
+- [x] `/ready` validates production JWT secret safety
+- [x] `/ready` validates feature dependency configs when enabled
+- [ ] staging readiness endpoint returns all checks `ok=true`
+
+## 5) Security and Abuse Controls
+
+- [x] referral self-claim blocked
+- [x] duplicate referral-code claim by second user blocked
+- [x] signed OAuth state + production auth controls retained from prior phases
+
+## 6) Release Tag and Notes
+
+Recommended tag after merge to main:
+- v0.9.0
+
+Commands:
+- git checkout main
+- git pull --ff-only origin main
+- git tag -a v0.9.0 -m "Release 0.9.0: Phase 8 beta launch APIs and readiness hardening"
+- git push origin v0.9.0
