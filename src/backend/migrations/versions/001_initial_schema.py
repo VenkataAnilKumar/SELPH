@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Required for Vector(...) columns used in identity_profiles/topics.
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
     # Create users table
     op.create_table(
         'users',
