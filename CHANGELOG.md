@@ -27,19 +27,21 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Alembic configuration now includes required `[alembic]` section header in [src/backend/alembic.ini](src/backend/alembic.ini).
 - Migration runtime import path fixed in [src/backend/migrations/env.py](src/backend/migrations/env.py) so `alembic` resolves the backend package correctly.
+- Migration smoke service image corrected from `pgvector/pgvector:pg16-latest` to `pgvector/pgvector:pg16` (commit `afc7582`).
+- GitHub Actions service host changed to `127.0.0.1` to avoid IPv6 resolution issues in ubuntu-latest runners (commit `ec92db7`).
+- Migration smoke switched to `npm run smoke:backend:migrate` from repo root to fix working directory mismatch (commit `e844978`).
+- Alembic and pytest now invoked via `sys.executable -m` to avoid PATH resolution failures in CI (commit `da3d2ad`).
+- DB readiness wait loop added (45 s, 1 s polling) with multi-host fallback probing so migration smoke waits for Postgres service to accept connections (commit `c4d8c99`).
+- `CREATE EXTENSION IF NOT EXISTS vector` added as first statement of `001_initial_schema.upgrade()` so pgvector type is available before VECTOR-typed columns are created (commit `4f9fdc4`).
+- `alembic_version.version_num` widened to `VARCHAR(256)` via `ALTER TABLE` at migration start — Alembic default of `VARCHAR(32)` is too short for descriptive revision IDs such as `005_phase9_twin_briefing_foundation` (commit `2da484c`).
 
-### Validation
-- Backend full suite: `287 passed`.
-- Web suite: `23 passed`.
-- Mobile suite: `32 passed`.
-- Phase 10 API smoke suite: `7 passed`.
-- Migration command reaches database connection stage successfully; local run blocked only because PostgreSQL is not running on `localhost:5432` in this environment.
-- GitHub Actions for commit `b36ebae`:
-	- Backend Tests: success
-	- Web Tests: success
-	- Mobile Tests: success
-	- Migration Smoke: failed during container initialization (invalid service image tag)
-- Follow-up fix: migration smoke service image corrected from `pgvector/pgvector:pg16-latest` to `pgvector/pgvector:pg16`.
+### Validation — v1.0.0-rc (commit `2da484c`)
+- GitHub Actions CI run `25088596786` — **all 4 jobs passed**:
+  - Backend Tests: **success** (287 passed)
+  - Web Tests: **success** (23 passed)
+  - Mobile Tests: **success** (32 passed)
+  - Migration Smoke: **success** (full schema applied + 7 smoke tests passed)
+- Tag `v1.0.0-rc` points to commit `2da484c` — first fully-green CI run across all jobs.
 
 ## [0.9.0] - Unreleased
 

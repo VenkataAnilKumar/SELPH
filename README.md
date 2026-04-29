@@ -5,7 +5,8 @@
 
 <br/>
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](.)
+[![CI](https://github.com/VenkataAnilKumar/SELPH/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/VenkataAnilKumar/SELPH/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.0.0--rc-blue?style=flat-square)](https://github.com/VenkataAnilKumar/SELPH/releases/tag/v1.0.0-rc)
 [![Stack](https://img.shields.io/badge/FastAPI%20%7C%20LangGraph%20%7C%20pgvector-orange?style=flat-square)](.)
 [![LLMs](https://img.shields.io/badge/140%2B%20LLMs%20via%20LiteLLM-red?style=flat-square)](.)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square)](.)

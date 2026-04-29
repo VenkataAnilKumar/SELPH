@@ -1,15 +1,15 @@
 # SELPH Build Readiness Scorecard
 
 Date: April 27, 2026
-Updated: April 27, 2026
-Status: Amber → Green trajectory
-Recommendation: Proceed with controlled build for Phases 0-3. Do not open external beta until blockers are closed.
+Updated: April 28, 2026
+Status: Green (CI validated)
+Recommendation: Backend phases 0–10 are built and fully CI-validated. Next step is infra provisioning and channel onboarding before opening external pilot.
 
 ## Executive Summary
 
-SELPH now has strong product clarity, feature expansion specs, modern architecture design, and technical specification depth across all 15 documents. All documents are consistent. The current risk is not design quality, but operational readiness across compliance, integrations, and infrastructure setup.
+SELPH now has strong product clarity, feature expansion specs, modern architecture design, and technical specification depth across all 15 documents. All documents are consistent. Phases 0–10 are built, tested, and CI-green (commit `2da484c`, tag `v1.0.0-rc`). The remaining risk is operational: infra provisioning, channel onboarding, and observability instrumentation before external pilot.
 
-Readiness score: 82 out of 100 (updated from 74 — architecture and feature gaps now closed).
+Readiness score: 88 out of 100 (updated from 82 — Phase 10 full implementation and CI validation complete).
 
 ## Scorecard
 
@@ -19,54 +19,65 @@ Readiness score: 82 out of 100 (updated from 74 — architecture and feature gap
 | PRD completeness | 9/10 | Green | Goals, metrics, phased scope, and 10 new features now specified |
 | System architecture definition | 9/10 | Green | MVP + modern event-driven architecture both fully documented |
 | API contract definition | 9/10 | Green | All endpoints including new features defined |
-| Database schema readiness | 8/10 | Green | Core entities defined; new feature tables added |
-| AI twin logic specification | 8/10 | Green | New LangGraph nodes, pgvector, Redis checkpointing documented |
+| Database schema readiness | 9/10 | Green | 8 migrations applied; all VECTOR columns, pgvector extension, and Phase 10 tables CI-validated |
+| AI twin logic specification | 9/10 | Green | Phase 10 proactive, crisis, style, verification, privacy, T2T all implemented |
+| Backend test coverage | 9/10 | Green | 287 backend tests passing in CI; 7 migration smoke tests green |
 | Safety and trust design | 8/10 | Green | Moderation, audit, anomaly, consent, and crisis mode strong |
 | Privacy and compliance consistency | 8/10 | Green | Canonical policy matrix published; all docs aligned |
+| CI and release readiness | 9/10 | Green | All 4 CI jobs passing on main; tag v1.0.0-rc at commit 2da484c |
 | Integration feasibility for MVP channels | 6/10 | Amber | Instagram and Gmail feasible but onboarding complexity is real |
-| Execution realism for timeline and team | 6/10 | Amber | 16-week target tight for small team; Phase 1 expansion features add scope |
+| Infrastructure provisioning | 4/10 | Red | Railway production environment not yet set up |
+| Observability | 4/10 | Red | SLO dashboard not yet instrumented |
+| Security hardening | 5/10 | Amber | Token encryption and webhook verification need acceptance criteria |
 
-## Critical Blockers
+## Closed Blockers (as of April 28, 2026)
 
-1. Integration friction blocker (unchanged)
-- Instagram Business Account requirements and Gmail Pub/Sub setup can delay onboarding.
-- Action: build guided onboarding and test tenant checklist before pilot recruitment.
+- Phase 10 backend foundations — all routers, services, tasks, schemas, and migrations built and passing (287 tests).
+- CI Migration Smoke — fully green after 7 iterative fixes; root causes were pgvector extension order, `alembic_version` column width, image tag, IPv4 host binding, working directory, and PATH resolution.
+- Tag `v1.0.0-rc` at commit `2da484c` — first clean release candidate with full CI green.
 
-2. Observability blocker (unchanged)
-- No final SLO pack for latency, queue lag, moderation false positives, and approval funnel health.
-- Action: define and instrument MVP SLOs before alpha. See modern architecture observability section.
+## Critical Blockers (remaining)
 
-3. Security implementation blocker (unchanged)
-- Token encryption, key-management procedures, webhook verification hardening, and deletion-certificate workflow need acceptance criteria.
-- Action: convert into security gates in deployment checklist.
+1. Infrastructure provisioning blocker
+- Railway production environment (FastAPI, Celery, PostgreSQL + pgvector, Redis) not yet set up.
+- Cloudflare R2 storage and DNS/WAF not configured.
+- Action: provision Railway services and Cloudflare resources before any external pilot.
 
-4. Infrastructure readiness blocker (new)
-- Railway production environment must be fully configured before Phase 5 channels go live.
-- Action: set up Railway services (FastAPI, Celery, PostgreSQL, Redis), Cloudflare R2, and Cloudflare DNS/WAF in Phase 4 window (Weeks 7–8).
+2. Channel onboarding blocker
+- Instagram Business Account requirements and Gmail Pub/Sub setup will delay real tenant onboarding.
+- Action: build guided onboarding flow and test checklist before pilot recruitment.
 
-## Go and No-Go Decision
+3. Observability blocker
+- No SLO dashboard for p95 draft latency, queue lag, moderation false positives, and approval funnel health.
+- Action: instrument Prometheus/Grafana or Railway metrics before alpha.
 
-Go now:
-- Foundation build (Phase 0)
-- Identity core (Phase 1)
-- Text draft generation (Phase 2)
-- Human approval loop (Phase 3)
-- Twin Briefing, VIP Override, Batch Pattern Approval (Phase 1 expansion — low effort, high value)
+4. Security hardening blocker
+- Token encryption, key-management procedures, webhook verification hardening, and deletion-certificate workflow need acceptance criteria and sign-off.
+- Action: define security gates in deployment checklist.
+
+## Go and No-Go Decision (updated April 28, 2026)
+
+Go now (all built and CI-green):
+- Foundation build (Phase 0) — done
+- Identity core (Phase 1) — done
+- Text draft generation (Phase 2) — done
+- Human approval loop (Phase 3) — done
+- Twin Briefing, VIP Override, Batch Pattern Approval (Phase 9) — done
+- Proactive, Crisis, Style Evolution, Verification, Privacy, T2T (Phase 10) — done
+- Infra provisioning (Railway + Cloudflare) — next action
 
 No-go until blockers close:
 - External pilot with real creators
-- Any autonomous action expansion
-- High-volume channel onboarding
-- Phase 2 scale improvements (pgvector already in use; Redis checkpointing if higher concurrency needed)
+- Production LLM API keys and BYOK flow
+- Instagram and Gmail production channel integration
+- Any autonomous send without human approval
 
-## Exit Criteria for Green Readiness
+## Exit Criteria for Pilot-Ready (90+)
 
-All criteria below must be satisfied:
+1. Railway production environment live and passing integration tests.
+2. Channel onboarding playbook completed for Instagram and Gmail.
+3. SLO dashboard live: p95 draft latency, error rate, queue lag, moderation outcomes.
+4. Security controls validated in staging with sign-off.
+5. LiteLLM gateway tested end-to-end with production LLM API keys.
 
-1. Channel onboarding playbook completed for Instagram and Gmail.
-2. SLO dashboard live for p95 draft latency, error rate, queue lag, and moderation outcomes.
-3. Security controls validated in staging with sign-off.
-4. Railway production environment passing all integration tests.
-5. Twin Briefing, VIP Override, Batch Approval endpoints implemented and tested.
-
-When complete, target readiness: 90 out of 100 or higher.
+When complete, target readiness: 93 out of 100.
