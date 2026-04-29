@@ -2,6 +2,8 @@
 Twin management service
 """
 
+from datetime import datetime, timedelta, UTC
+
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models import Twin, User
@@ -150,3 +152,54 @@ class TwinService:
         db.commit()
         db.refresh(twin)
         return twin
+
+    @staticmethod
+    def get_quality_summary(db: Session, user_id: str) -> dict:
+        """Return a compact 7-day quality dashboard summary for beta users."""
+        from app.models import Draft
+
+        twin = TwinService.get_twin(db, user_id)
+        if not twin:
+            return None
+
+        since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+        drafts_7d = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.created_at >= since,
+        )
+
+        drafts_handled_7d = drafts_7d.count()
+
+        approved_edited_7d = drafts_7d.filter(Draft.status.in_(["approved", "edited"]))
+        approved_edited_count = approved_edited_7d.count()
+        rejected_count = drafts_7d.filter(Draft.status == "rejected").count()
+        decided_count = approved_edited_count + rejected_count
+        approval_rate = round(approved_edited_count / decided_count, 4) if decided_count > 0 else 0.0
+
+        avg_latency = drafts_7d.with_entities(func.avg(Draft.pipeline_latency_ms)).scalar()
+        avg_pipeline_latency_ms_7d = int(round(avg_latency)) if avg_latency else 0
+
+        pending_drafts = db.query(Draft).filter(
+            Draft.user_id == user_id,
+            Draft.status == "pending_approval",
+        ).count()
+
+        if approval_rate >= 0.85:
+            quality_label = "excellent"
+            recommendation = "Twin quality is strong. Maintain profile updates and monitor edge cases."
+        elif approval_rate >= 0.7:
+            quality_label = "good"
+            recommendation = "Quality is stable. Review rejected drafts to improve tone consistency."
+        else:
+            quality_label = "needs_attention"
+            recommendation = "Quality is below target. Add more identity examples and review moderation feedback."
+
+        return {
+            "twin_id": twin.id,
+            "approval_rate_7d": approval_rate,
+            "drafts_handled_7d": drafts_handled_7d,
+            "avg_pipeline_latency_ms_7d": avg_pipeline_latency_ms_7d,
+            "pending_drafts": pending_drafts,
+            "quality_label": quality_label,
+            "recommendation": recommendation,
+        }

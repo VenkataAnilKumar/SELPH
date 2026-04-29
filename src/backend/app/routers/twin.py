@@ -9,7 +9,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import User
 from app.services import TwinService
-from app.schemas import TwinResponse, TwinStatsResponse, UpdateTwinRequest
+from app.schemas import TwinResponse, TwinStatsResponse, TwinQualitySummaryResponse, UpdateTwinRequest
 
 router = APIRouter(tags=["twin"])
 
@@ -125,4 +125,21 @@ async def update_twin_profile(
         )
     
     return TwinResponse.model_validate(twin)
+
+
+@router.get("/quality-summary", response_model=TwinQualitySummaryResponse)
+async def get_twin_quality_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Phase 8 beta quality dashboard summary for the current twin."""
+    summary = TwinService.get_quality_summary(db, current_user.id)
+
+    if not summary:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Twin not found",
+        )
+
+    return TwinQualitySummaryResponse(**summary)
 

@@ -42,6 +42,18 @@ class TwinStatsResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
+class TwinQualitySummaryResponse(BaseModel):
+    """Phase 8 beta quality dashboard summary."""
+
+    twin_id: str
+    approval_rate_7d: float
+    drafts_handled_7d: int
+    avg_pipeline_latency_ms_7d: int
+    pending_drafts: int
+    quality_label: str
+    recommendation: str
+
+
 class UpdateTwinRequest(BaseModel):
     """Request to update twin profile"""
     domain: Optional[str] = None
