@@ -57,6 +57,12 @@ interface ConnectedChannel {
   updated_at: string;
 }
 
+interface ProactiveSuggestionSummary {
+  id: string;
+  suggestion_type: string;
+  signal_summary: string;
+}
+
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [twin, setTwin] = useState<Twin | null>(null);
@@ -77,6 +83,10 @@ export default function DashboardPage() {
   const [onboardingLength, setOnboardingLength] = useState<string>("medium");
   const [onboardingAudienceTone, setOnboardingAudienceTone] = useState<string>("");
   const [onboardingThreeWords, setOnboardingThreeWords] = useState<string>("");
+  const [phase10Busy, setPhase10Busy] = useState(false);
+  const [proactiveSuggestions, setProactiveSuggestions] = useState<ProactiveSuggestionSummary[]>([]);
+  const [privacyMode, setPrivacyMode] = useState<string>("cloud");
+  const [certificateId, setCertificateId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -277,6 +287,75 @@ export default function DashboardPage() {
     }
   };
 
+  const runPhase10Snapshot = async () => {
+    try {
+      setPhase10Busy(true);
+      setActionError(null);
+
+      const [scanResponse, suggestionsResponse, privacyResponse, certResponse] = await Promise.all([
+        apiClient.runProactiveScan(),
+        apiClient.getProactiveSuggestions("pending", 3),
+        apiClient.getPrivacySettings(),
+        apiClient.getMyCertificate(),
+      ]);
+
+      const created = scanResponse.data?.created ?? 0;
+      setProactiveSuggestions(suggestionsResponse.data?.items ?? []);
+      setPrivacyMode(privacyResponse.data?.processing_mode ?? "cloud");
+      setCertificateId(certResponse.data?.twin_public_id ?? "");
+
+      setActionMessage(`Phase 10 snapshot refreshed. ${created} proactive suggestions created.`);
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to refresh Phase 10 snapshot");
+    } finally {
+      setPhase10Busy(false);
+    }
+  };
+
+  const setCrisisMode = async (mode: "crisis_mode" | "manual_pause") => {
+    try {
+      setPhase10Busy(true);
+      setActionError(null);
+      await apiClient.activateCrisis(mode);
+      setActionMessage(mode === "manual_pause" ? "Twin paused in manual crisis mode." : "Crisis mode activated.");
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to activate crisis mode");
+    } finally {
+      setPhase10Busy(false);
+    }
+  };
+
+  const clearCrisisMode = async () => {
+    try {
+      setPhase10Busy(true);
+      setActionError(null);
+      await apiClient.resolveCrisis();
+      setActionMessage("Crisis mode resolved. Twin returned to normal.");
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to resolve crisis mode");
+    } finally {
+      setPhase10Busy(false);
+    }
+  };
+
+  const togglePrivacyMode = async () => {
+    const next = privacyMode === "cloud" ? "on_device" : "cloud";
+    try {
+      setPhase10Busy(true);
+      setActionError(null);
+      if (next === "on_device") {
+        await apiClient.updatePrivacyCapability(true);
+      }
+      const response = await apiClient.updatePrivacySettings({ processing_mode: next as any });
+      setPrivacyMode(response.data.processing_mode);
+      setActionMessage(`Privacy mode set to ${response.data.processing_mode}.`);
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || "Failed to update privacy mode");
+    } finally {
+      setPhase10Busy(false);
+    }
+  };
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-100">
@@ -291,6 +370,66 @@ export default function DashboardPage() {
               <div className="text-right">
                 <p className="text-sm text-gray-600">Logged in as</p>
                 <p className="font-medium text-gray-900">{user?.email}</p>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-8 md:col-span-2">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Phase 10 Controls</h2>
+                <p className="text-sm text-gray-600 mb-6">
+                  Quick actions for proactive twin, crisis mode, privacy mode, and verification.
+                </p>
+
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <button
+                    onClick={runPhase10Snapshot}
+                    disabled={phase10Busy}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    Refresh Phase 10 Snapshot
+                  </button>
+                  <button
+                    onClick={() => setCrisisMode("crisis_mode")}
+                    disabled={phase10Busy}
+                    className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    Activate Crisis
+                  </button>
+                  <button
+                    onClick={() => setCrisisMode("manual_pause")}
+                    disabled={phase10Busy}
+                    className="px-4 py-2 rounded-lg bg-orange-700 text-white hover:bg-orange-800 disabled:opacity-60"
+                  >
+                    Manual Pause
+                  </button>
+                  <button
+                    onClick={clearCrisisMode}
+                    disabled={phase10Busy}
+                    className="px-4 py-2 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
+                  >
+                    Resolve Crisis
+                  </button>
+                  <button
+                    onClick={togglePrivacyMode}
+                    disabled={phase10Busy}
+                    className="px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    Toggle Privacy Mode
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs uppercase text-gray-500">Privacy Mode</p>
+                    <p className="text-lg font-semibold text-gray-900">{privacyMode}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs uppercase text-gray-500">Twin Certificate</p>
+                    <p className="text-sm font-mono text-gray-900 break-all">{certificateId || "Not loaded"}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs uppercase text-gray-500">Proactive Suggestions</p>
+                    <p className="text-lg font-semibold text-gray-900">{proactiveSuggestions.length}</p>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={handleLogout}

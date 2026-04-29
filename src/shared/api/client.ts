@@ -97,6 +97,137 @@ class ApiClient {
     return this.client.post(`/channels/${channel}/disconnect`)
   }
 
+  // Phase 10: Proactive Twin
+  async getProactiveSuggestions(statusFilter?: string, limit = 50) {
+    return this.client.get('/proactive/suggestions', {
+      params: {
+        status_filter: statusFilter,
+        limit,
+      },
+    })
+  }
+
+  async actOnProactiveSuggestion(
+    suggestionId: string,
+    action: 'approve' | 'dismiss' | 'never' | 'snooze',
+    editedMessage?: string,
+    snoozeDays = 30
+  ) {
+    return this.client.post(`/proactive/suggestions/${suggestionId}/act`, {
+      action,
+      edited_message: editedMessage,
+      snooze_days: snoozeDays,
+    })
+  }
+
+  async getProactivePreferences() {
+    return this.client.get('/proactive/preferences')
+  }
+
+  async updateProactivePreferences(payload: {
+    enabled?: boolean
+    enabled_types?: string[]
+    cold_threshold_days?: number
+    open_thread_hours?: number
+    max_suggestions_per_day?: number
+  }) {
+    return this.client.patch('/proactive/preferences', payload)
+  }
+
+  async runProactiveScan() {
+    return this.client.post('/proactive/scan')
+  }
+
+  // Phase 10: Crisis / Surge
+  async getSurgeStatus() {
+    return this.client.get('/twin/surge-status')
+  }
+
+  async activateCrisis(mode: 'crisis_alert' | 'crisis_mode' | 'manual_pause' = 'crisis_mode') {
+    return this.client.post('/twin/crisis/activate', {
+      mode,
+      trigger_type: 'manual',
+    })
+  }
+
+  async resolveCrisis() {
+    return this.client.post('/twin/crisis/resolve', {
+      resolution_type: 'manual_resume',
+    })
+  }
+
+  // Phase 10: Multi-Identity
+  async listIdentityProfiles() {
+    return this.client.get('/identity/profiles')
+  }
+
+  async createIdentityProfile(payload: {
+    profile_name: string
+    profile_type: string
+    vocabulary_description?: string
+    communication_style?: string
+  }) {
+    return this.client.post('/identity/profiles', payload)
+  }
+
+  // Phase 10: Style Evolution
+  async refreshStyleCheckpoint(profileId?: string) {
+    return this.client.post('/twin/style/refresh', null, {
+      params: profileId ? { profile_id: profileId } : undefined,
+    })
+  }
+
+  async listStyleCheckpoints() {
+    return this.client.get('/twin/style/checkpoints')
+  }
+
+  // Phase 10: Verification
+  async getMyCertificate() {
+    return this.client.get('/twin/certificate')
+  }
+
+  async revokeMyCertificate(reason?: string) {
+    return this.client.post('/twin/certificate/revoke', { reason })
+  }
+
+  async verifyTwinMessage(twinId: string, messageHash: string, signature?: string) {
+    return this.client.get(`/verify/${twinId}/${messageHash}`, {
+      params: signature ? { signature } : undefined,
+    })
+  }
+
+  // Phase 10: Privacy
+  async getPrivacySettings() {
+    return this.client.get('/privacy/settings')
+  }
+
+  async updatePrivacySettings(payload: {
+    processing_mode?: 'cloud' | 'hybrid' | 'on_device'
+    cloud_sync_scope?: 'full' | 'metadata_only' | 'none'
+    voice_clone_enabled?: boolean
+    avatar_enabled?: boolean
+  }) {
+    return this.client.patch('/privacy/settings', payload)
+  }
+
+  async updatePrivacyCapability(onDeviceCapable: boolean) {
+    return this.client.post('/privacy/capability-check', {
+      on_device_capable: onDeviceCapable,
+    })
+  }
+
+  // Phase 10: Twin-to-Twin protocol
+  async createT2TSession(initiatingTwin: string, receivingTwin: string, sessionType: 'scheduling' | 'availability' | 'introduction') {
+    return this.client.post(`/t2t/sessions?initiating_twin=${encodeURIComponent(initiatingTwin)}`, {
+      receiving_twin: receivingTwin,
+      session_type: sessionType,
+    })
+  }
+
+  async listT2TSessions(twinId: string) {
+    return this.client.get('/t2t/sessions', { params: { twin_id: twinId } })
+  }
+
   // Health check
   async health() {
     return this.client.get('/health')

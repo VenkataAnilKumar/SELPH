@@ -68,6 +68,12 @@ interface ConnectedChannel {
   updated_at: string
 }
 
+interface ProactiveSuggestionSummary {
+  id: string
+  suggestion_type: string
+  signal_summary: string
+}
+
 export default function DashboardScreen() {
   const { user, logout } = useMobileAuth()
   const [twin, setTwin] = useState<Twin | null>(null)
@@ -88,6 +94,10 @@ export default function DashboardScreen() {
   const [onboardingLength, setOnboardingLength] = useState('medium')
   const [onboardingAudienceTone, setOnboardingAudienceTone] = useState('')
   const [onboardingThreeWords, setOnboardingThreeWords] = useState('')
+  const [phase10Busy, setPhase10Busy] = useState(false)
+  const [privacyMode, setPrivacyMode] = useState('cloud')
+  const [certificateId, setCertificateId] = useState('')
+  const [proactiveSuggestions, setProactiveSuggestions] = useState<ProactiveSuggestionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -298,6 +308,75 @@ export default function DashboardScreen() {
         },
       ]
     )
+  }
+
+  const runPhase10Snapshot = async () => {
+    try {
+      setPhase10Busy(true)
+      setActionError(null)
+
+      const [scanResponse, suggestionsResponse, privacyResponse, certResponse] = await Promise.all([
+        apiClient.runProactiveScan(),
+        apiClient.getProactiveSuggestions('pending', 3),
+        apiClient.getPrivacySettings(),
+        apiClient.getMyCertificate(),
+      ])
+
+      const created = scanResponse.data?.created ?? 0
+      setProactiveSuggestions(suggestionsResponse.data?.items ?? [])
+      setPrivacyMode(privacyResponse.data?.processing_mode ?? 'cloud')
+      setCertificateId(certResponse.data?.twin_public_id ?? '')
+
+      setActionMessage(`Phase 10 snapshot refreshed. ${created} proactive suggestions created.`)
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || 'Failed to refresh Phase 10 snapshot')
+    } finally {
+      setPhase10Busy(false)
+    }
+  }
+
+  const setCrisisMode = async (mode: 'crisis_mode' | 'manual_pause') => {
+    try {
+      setPhase10Busy(true)
+      setActionError(null)
+      await apiClient.activateCrisis(mode)
+      setActionMessage(mode === 'manual_pause' ? 'Twin paused in manual crisis mode.' : 'Crisis mode activated.')
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || 'Failed to activate crisis mode')
+    } finally {
+      setPhase10Busy(false)
+    }
+  }
+
+  const clearCrisisMode = async () => {
+    try {
+      setPhase10Busy(true)
+      setActionError(null)
+      await apiClient.resolveCrisis()
+      setActionMessage('Crisis mode resolved. Twin returned to normal.')
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || 'Failed to resolve crisis mode')
+    } finally {
+      setPhase10Busy(false)
+    }
+  }
+
+  const togglePrivacyMode = async () => {
+    const next = privacyMode === 'cloud' ? 'on_device' : 'cloud'
+    try {
+      setPhase10Busy(true)
+      setActionError(null)
+      if (next === 'on_device') {
+        await apiClient.updatePrivacyCapability(true)
+      }
+      const response = await apiClient.updatePrivacySettings({ processing_mode: next as any })
+      setPrivacyMode(response.data.processing_mode)
+      setActionMessage(`Privacy mode set to ${response.data.processing_mode}.`)
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail || 'Failed to update privacy mode')
+    } finally {
+      setPhase10Busy(false)
+    }
   }
 
   if (loading) {
@@ -523,6 +602,36 @@ export default function DashboardScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Phase 10 Controls</Text>
+        <Text style={styles.sectionSubtitle}>
+          Quick access to proactive scan, crisis controls, and privacy mode.
+        </Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.primaryButton} onPress={runPhase10Snapshot} disabled={phase10Busy}>
+            <Text style={styles.primaryButtonText}>Refresh Snapshot</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pauseButton} onPress={() => setCrisisMode('crisis_mode')} disabled={phase10Busy}>
+            <Text style={styles.primaryButtonText}>Activate Crisis</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.editButton} onPress={() => setCrisisMode('manual_pause')} disabled={phase10Busy}>
+            <Text style={styles.editButtonText}>Manual Pause</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.resumeButton} onPress={clearCrisisMode} disabled={phase10Busy}>
+            <Text style={styles.primaryButtonText}>Resolve Crisis</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={togglePrivacyMode} disabled={phase10Busy}>
+            <Text style={styles.secondaryButtonText}>Toggle Privacy ({privacyMode})</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.metaText}>Certificate: {certificateId || 'Not loaded'}</Text>
+        <Text style={styles.metaText}>Proactive suggestions: {proactiveSuggestions.length}</Text>
       </View>
 
       <View style={styles.card}>
