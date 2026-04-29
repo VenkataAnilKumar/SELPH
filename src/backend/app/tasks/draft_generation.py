@@ -100,6 +100,7 @@ def generate_draft_for_message(self, message_id: str, user_id: str):
                 "confidence": pipeline["confidence_score"],
                 "moderation_passed": pipeline["moderation_passed"],
                 "generation_source": pipeline.get("generation_source"),
+                "briefing_ids_referenced": pipeline.get("briefing_ids_referenced", []),
                 "metrics": pipeline.get("metrics", {}),
             }
         

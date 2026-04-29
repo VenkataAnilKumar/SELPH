@@ -313,6 +313,53 @@ class TwinEngineService:
         return " ".join(words[:max_words]).rstrip() + "..."
 
     @staticmethod
+    def _extract_reference_tokens(text: str) -> list[str]:
+        """Extract simple keyword tokens for briefing reference matching."""
+        tokens = []
+        for raw in text.lower().split():
+            cleaned = "".join(ch for ch in raw if ch.isalnum())
+            if len(cleaned) >= 4:
+                tokens.append(cleaned)
+        return list(dict.fromkeys(tokens))
+
+    @staticmethod
+    def _get_referenced_briefings(ctx: TwinContext, draft: str) -> list[TwinBriefing]:
+        """Return briefings that appear referenced by incoming message or generated draft."""
+        if not ctx.active_briefings:
+            return []
+
+        search_space = f"{ctx.message.content}\n{draft}".lower()
+        referenced: list[TwinBriefing] = []
+
+        for briefing in ctx.active_briefings:
+            topic_tokens = TwinEngineService._extract_reference_tokens(briefing.topic)
+            content_tokens = TwinEngineService._extract_reference_tokens(briefing.content)
+            # Cap content token scan to keep matching cheap and deterministic.
+            candidate_tokens = list(dict.fromkeys(topic_tokens + content_tokens[:12]))
+
+            if any(token in search_space for token in candidate_tokens):
+                referenced.append(briefing)
+
+        return referenced
+
+    @staticmethod
+    def _increment_briefing_use_counts(db: Session, briefings: list[TwinBriefing]) -> None:
+        """Increment use_count for referenced briefings and deactivate when max uses reached."""
+        if not briefings:
+            return
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for briefing in briefings:
+            briefing.use_count = (briefing.use_count or 0) + 1
+            if briefing.max_uses is not None and briefing.use_count >= briefing.max_uses:
+                briefing.is_active = False
+                if briefing.cleared_at is None:
+                    briefing.cleared_at = now
+            db.add(briefing)
+
+        db.commit()
+
+    @staticmethod
     def _generate_draft(ctx: TwinContext, system_prompt: str, user_prompt: str) -> tuple[str, dict, str, list, str, dict]:
         if TwinEngineService._contains_avoided_topic(ctx.message.content, ctx.avoided_topics):
             draft = "That's not something I cover — let me get back to you"
@@ -406,6 +453,9 @@ class TwinEngineService:
             user_prompt,
         )
 
+        referenced_briefings = TwinEngineService._get_referenced_briefings(ctx, draft)
+        TwinEngineService._increment_briefing_use_counts(db, referenced_briefings)
+
         confidence_score = TwinEngineService._compute_overall_confidence(factors)
         confidence_label = ModerationService.get_confidence_label(confidence_score)
 
@@ -440,6 +490,8 @@ class TwinEngineService:
             "parse_retry_count": generation_metrics.get("parse_retry_count", 0),
             "llm_calls": generation_metrics.get("llm_calls", 0),
             "used_fallback": generation_source != "llm",
+            "briefings_referenced_count": len(referenced_briefings),
+            "briefing_ids_referenced": [b.id for b in referenced_briefings],
             "llm_model": llm_model,
             "fallback_reason": fallback_reason,
             "estimated_input_tokens": estimated_input_tokens,
@@ -474,6 +526,7 @@ class TwinEngineService:
             "generation_source": generation_source,
             "llm_model": llm_model,
             "fallback_reason": fallback_reason,
+            "briefing_ids_referenced": [b.id for b in referenced_briefings],
             "estimated_input_tokens": estimated_input_tokens,
             "estimated_output_tokens": estimated_output_tokens,
             "estimated_total_tokens": estimated_total_tokens,

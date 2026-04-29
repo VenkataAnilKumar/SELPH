@@ -99,3 +99,82 @@ class TestDraftGenerationTaskPipeline:
 
         assert result["status"] == "error"
         assert result["reason"] == "Message not found"
+
+    @patch("app.tasks.push_notifications.notify_draft_ready")
+    def test_generate_draft_task_increments_briefing_use_count(self, mock_notify, test_db, test_user, monkeypatch):
+        """Referenced twin briefing should increment use_count after draft generation."""
+        _bind_task_engine_to_test_db(monkeypatch, test_db)
+        mock_notify.delay = MagicMock(return_value=None)
+
+        briefing = IdentityService.create_twin_briefing(
+            test_db,
+            user_id=test_user.id,
+            briefing_type="fact",
+            topic="course launch",
+            content="My new course launched this week",
+            priority=8,
+        )
+
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "sender_task_3",
+            "Pat",
+            "Tell me more about your course launch plans",
+            {},
+        )
+
+        result = draft_generation_task.generate_draft_for_message.run(message.id, test_user.id)
+        assert result["status"] == "success"
+
+        db = sessionmaker(bind=test_db.get_bind())()
+        try:
+            refreshed = IdentityService.list_twin_briefings(db, test_user.id, include_inactive=True)
+            assert len(refreshed) == 1
+            assert refreshed[0].id == briefing.id
+            assert refreshed[0].use_count == 1
+            assert refreshed[0].is_active is True
+            assert briefing.id in result.get("briefing_ids_referenced", [])
+        finally:
+            db.close()
+
+    @patch("app.tasks.push_notifications.notify_draft_ready")
+    def test_generate_draft_task_deactivates_briefing_at_max_uses(self, mock_notify, test_db, test_user, monkeypatch):
+        """Briefing should auto-deactivate when use_count reaches max_uses."""
+        _bind_task_engine_to_test_db(monkeypatch, test_db)
+        mock_notify.delay = MagicMock(return_value=None)
+
+        briefing = IdentityService.create_twin_briefing(
+            test_db,
+            user_id=test_user.id,
+            briefing_type="instruction",
+            topic="collabs",
+            content="Route collab requests to my manager",
+            priority=9,
+            max_uses=1,
+        )
+
+        message = MessageService.create_message(
+            test_db,
+            test_user.id,
+            "instagram_dm",
+            "sender_task_4",
+            "Taylor",
+            "Can we discuss collabs this month?",
+            {},
+        )
+
+        result = draft_generation_task.generate_draft_for_message.run(message.id, test_user.id)
+        assert result["status"] == "success"
+
+        db = sessionmaker(bind=test_db.get_bind())()
+        try:
+            refreshed = IdentityService.list_twin_briefings(db, test_user.id, include_inactive=True)
+            assert len(refreshed) == 1
+            assert refreshed[0].id == briefing.id
+            assert refreshed[0].use_count == 1
+            assert refreshed[0].is_active is False
+            assert refreshed[0].cleared_at is not None
+        finally:
+            db.close()
