@@ -1,14 +1,18 @@
 # SELPH — Implementation Plan
 
-> Version: 1.1
+> Version: 1.2
 > Created: 2026-04-27
-> Updated: 2026-04-27
-> Status: Ready to Execute
+> Updated: 2026-04-30
+> Status: Complete — Phases 0–10 built and CI-validated (v1.0.0-rc)
 > Reference: [MVP_BUILD_PLAN.md](./MVP_BUILD_PLAN.md) — high-level phases
-> This doc: hands-on, file-level, command-level execution guide
+> Next: [DEPLOYMENT_PLAN.md](./DEPLOYMENT_PLAN.md) — Phases 11–16, infra to pilot
+> This doc: hands-on, file-level, command-level execution guide for the build phase
 >
 > **v1.1 changes:** API versioning (/v1/), channel adapter pattern, service registry,
 > feature flags, voice/avatar queue placeholders, microservice extraction boundaries
+>
+> **v1.2 changes:** Status updated to Complete. All 14 routers, 8 migrations, and Phase 10
+> end-to-end features are built and passing CI (287 backend + 23 web + 32 mobile tests).
 
 ---
 
