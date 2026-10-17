@@ -5,6 +5,11 @@ Wraps the existing TwinEngineService sequential pipeline as an interruptible
 StateGraph. Enables human-in-the-loop (HITL) via interrupt_before on the
 await_human node, matching the architecture in docs/05-technical/SELPH_System-Architecture.md.
 
+Enhancements:
+- Conditional routing based on moderation_passed (flag_for_review vs await_human)
+- Explicit flag_for_review node for safety-flagged drafts
+- Better error handling and structured logging
+
 Usage:
     from app.services.twin_langgraph import build_twin_graph, TwinEngineState
     graph = build_twin_graph()
@@ -15,7 +20,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
@@ -48,64 +53,85 @@ class TwinEngineState(TypedDict, total=False):
     reasoning: str
     result: dict
     error: str | None
+    flagged_for_review: bool
 
 
 def load_context_node(state: TwinEngineState) -> TwinEngineState:
     """Load twin context, identity, topics, briefings, and history."""
-    db = state["db"]
-    message = db.query(__import__("app.models", fromlist=["Message"]).Message).filter(
-        __import__("app.models", fromlist=["Message"]).Message.id == state["message_id"],
-        __import__("app.models", fromlist=["Message"]).Message.user_id == state["user_id"],
-    ).first()
-    if not message:
-        return {"error": "Message not found"}
-    ctx = TwinEngineService._load_context(db, message, state["user_id"])
-    system_prompt, user_prompt = TwinEngineService._build_prompts(ctx)
-    return {"ctx": ctx, "system_prompt": system_prompt, "user_prompt": user_prompt}
+    try:
+        db = state["db"]
+        Message = __import__("app.models", fromlist=["Message"]).Message
+        message = db.query(Message).filter(
+            Message.id == state["message_id"],
+            Message.user_id == state["user_id"],
+        ).first()
+        if not message:
+            return {"error": "Message not found"}
+        ctx = TwinEngineService._load_context(db, message, state["user_id"])
+        system_prompt, user_prompt = TwinEngineService._build_prompts(ctx)
+        return {"ctx": ctx, "system_prompt": system_prompt, "user_prompt": user_prompt}
+    except Exception as exc:
+        logger.exception("load_context_node failed for message_id=%s", state.get("message_id"))
+        return {"error": str(exc)}
 
 
 def generate_draft_node(state: TwinEngineState) -> TwinEngineState:
     """Generate draft via LLM or deterministic fallback."""
     if state.get("error"):
         return state
-    ctx = state["ctx"]
-    draft, factors, reasoning, flags, source, metrics = TwinEngineService._generate_draft(
-        ctx, state["system_prompt"], state["user_prompt"]
-    )
-    return {
-        "draft": draft,
-        "factors": factors,
-        "generator_reasoning": reasoning,
-        "generator_flags": flags,
-        "generation_source": source,
-        "generation_metrics": metrics,
-    }
+    try:
+        ctx = state["ctx"]
+        draft, factors, reasoning, flags, source, metrics = TwinEngineService._generate_draft(
+            ctx, state["system_prompt"], state["user_prompt"]
+        )
+        return {
+            "draft": draft,
+            "factors": factors,
+            "generator_reasoning": reasoning,
+            "generator_flags": flags,
+            "generation_source": source,
+            "generation_metrics": metrics,
+        }
+    except Exception as exc:
+        logger.exception("generate_draft_node failed")
+        return {"error": str(exc)}
 
 
 def score_and_moderate_node(state: TwinEngineState) -> TwinEngineState:
     """Compute confidence and run content safety moderation."""
     if state.get("error"):
         return state
-    factors = state["factors"]
-    confidence_score = TwinEngineService._compute_overall_confidence(factors)
-    confidence_label = ModerationService.get_confidence_label(confidence_score)
-    moderation_passed, flags, risk_score = ModerationService.check_content_safety(state["draft"])
-    if not moderation_passed:
-        confidence_score = min(confidence_score, 0.3)
+    try:
+        factors = state["factors"]
+        confidence_score = TwinEngineService._compute_overall_confidence(factors)
         confidence_label = ModerationService.get_confidence_label(confidence_score)
-    reasoning = (
-        f"{state['generator_reasoning']} Generated with channel='{state['ctx'].message.channel}', "
-        f"topic_known={factors['topic_known']}, no_avoided_topics={factors['no_avoided_topics']}, "
-        f"moderation_risk={risk_score}."
-    )
-    return {
-        "confidence_score": confidence_score,
-        "confidence_label": confidence_label,
-        "moderation_passed": moderation_passed,
-        "moderation_flags": flags,
-        "risk_score": risk_score,
-        "reasoning": reasoning,
-    }
+        moderation_passed, flags, risk_score = ModerationService.check_content_safety(state["draft"])
+        if not moderation_passed:
+            confidence_score = min(confidence_score, 0.3)
+            confidence_label = ModerationService.get_confidence_label(confidence_score)
+        reasoning = (
+            f"{state['generator_reasoning']} Generated with channel='{state['ctx'].message.channel}', "
+            f"topic_known={factors['topic_known']}, no_avoided_topics={factors['no_avoided_topics']}, "
+            f"moderation_risk={risk_score}."
+        )
+        return {
+            "confidence_score": confidence_score,
+            "confidence_label": confidence_label,
+            "moderation_passed": moderation_passed,
+            "moderation_flags": flags,
+            "risk_score": risk_score,
+            "reasoning": reasoning,
+        }
+    except Exception as exc:
+        logger.exception("score_and_moderate_node failed")
+        return {"error": str(exc)}
+
+
+def route_after_moderation(state: TwinEngineState) -> Literal["await_human", "flag_for_review"]:
+    """Conditional router: HITL if safe, else flag for manual review."""
+    if state.get("error") or not state.get("moderation_passed", False):
+        return "flag_for_review"
+    return "await_human"
 
 
 def await_human_node(state: TwinEngineState) -> TwinEngineState:
@@ -114,36 +140,57 @@ def await_human_node(state: TwinEngineState) -> TwinEngineState:
     return state
 
 
+def flag_for_review_node(state: TwinEngineState) -> TwinEngineState:
+    """Mark draft as flagged for manual safety review; no automatic HITL."""
+    logger.warning(
+        "Draft flagged for review message_id=%s flags=%s risk=%s",
+        state.get("message_id"),
+        state.get("moderation_flags"),
+        state.get("risk_score"),
+    )
+    return {"flagged_for_review": True, "result": {"status": "flagged", "draft": state.get("draft")}}
+
+
 def process_decision_node(state: TwinEngineState) -> TwinEngineState:
     """Post-HITL processing (placeholder for approve/edit/reject side-effects)."""
-    # In full integration this would call DraftService based on human decision stored in state.
     result = {
         "draft": state.get("draft"),
         "confidence_score": state.get("confidence_score"),
         "confidence_label": state.get("confidence_label"),
         "moderation_passed": state.get("moderation_passed"),
+        "moderation_flags": state.get("moderation_flags"),
         "reasoning": state.get("reasoning"),
         "generation_source": state.get("generation_source"),
+        "status": "ready_for_decision",
     }
     return {"result": result}
 
 
 def build_twin_graph() -> Any:
-    """Compile the Twin Engine StateGraph with HITL interrupt."""
+    """Compile the Twin Engine StateGraph with HITL interrupt and conditional safety routing."""
     workflow = StateGraph(TwinEngineState)
 
     workflow.add_node("load_context", load_context_node)
     workflow.add_node("generate_draft", generate_draft_node)
     workflow.add_node("score_and_moderate", score_and_moderate_node)
     workflow.add_node("await_human", await_human_node)
+    workflow.add_node("flag_for_review", flag_for_review_node)
     workflow.add_node("process_decision", process_decision_node)
 
     workflow.set_entry_point("load_context")
     workflow.add_edge("load_context", "generate_draft")
     workflow.add_edge("generate_draft", "score_and_moderate")
-    workflow.add_edge("score_and_moderate", "await_human")
+    workflow.add_conditional_edges(
+        "score_and_moderate",
+        route_after_moderation,
+        {
+            "await_human": "await_human",
+            "flag_for_review": "flag_for_review",
+        },
+    )
     workflow.add_edge("await_human", "process_decision")
     workflow.add_edge("process_decision", END)
+    workflow.add_edge("flag_for_review", END)
 
     # Interrupt before human node so the graph can be resumed after approval.
     # Checkpointer (PostgresSaver / RedisSaver) should be supplied at compile time in production.
