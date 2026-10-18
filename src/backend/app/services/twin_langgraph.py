@@ -8,7 +8,7 @@ await_human node, matching the architecture in docs/05-technical/SELPH_System-Ar
 Enhancements:
 - Conditional routing based on moderation_passed (flag_for_review vs await_human)
 - Explicit flag_for_review node for safety-flagged drafts
-- Better error handling and structured logging
+- Better error handling, structured logging, and enriched result payloads for HITL/audit
 
 Usage:
     from app.services.twin_langgraph import build_twin_graph, TwinEngineState
@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -54,6 +55,10 @@ class TwinEngineState(TypedDict, total=False):
     result: dict
     error: str | None
     flagged_for_review: bool
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def load_context_node(state: TwinEngineState) -> TwinEngineState:
@@ -142,13 +147,26 @@ def await_human_node(state: TwinEngineState) -> TwinEngineState:
 
 def flag_for_review_node(state: TwinEngineState) -> TwinEngineState:
     """Mark draft as flagged for manual safety review; no automatic HITL."""
+    msg_id = state.get("message_id")
+    flags = state.get("moderation_flags") or []
+    risk = state.get("risk_score")
     logger.warning(
         "Draft flagged for review message_id=%s flags=%s risk=%s",
-        state.get("message_id"),
-        state.get("moderation_flags"),
-        state.get("risk_score"),
+        msg_id,
+        flags,
+        risk,
     )
-    return {"flagged_for_review": True, "result": {"status": "flagged", "draft": state.get("draft")}}
+    result = {
+        "status": "flagged",
+        "draft": state.get("draft"),
+        "moderation_flags": flags,
+        "risk_score": risk,
+        "confidence_score": state.get("confidence_score"),
+        "recommended_action": "manual_review",
+        "timestamp": _now_iso(),
+        "message_id": msg_id,
+    }
+    return {"flagged_for_review": True, "result": result}
 
 
 def process_decision_node(state: TwinEngineState) -> TwinEngineState:
@@ -158,11 +176,20 @@ def process_decision_node(state: TwinEngineState) -> TwinEngineState:
         "confidence_score": state.get("confidence_score"),
         "confidence_label": state.get("confidence_label"),
         "moderation_passed": state.get("moderation_passed"),
-        "moderation_flags": state.get("moderation_flags"),
+        "moderation_flags": state.get("moderation_flags") or [],
         "reasoning": state.get("reasoning"),
         "generation_source": state.get("generation_source"),
         "status": "ready_for_decision",
+        "recommended_action": "await_human_approval",
+        "timestamp": _now_iso(),
+        "message_id": state.get("message_id"),
     }
+    logger.info(
+        "Draft ready for HITL message_id=%s confidence=%s moderation_passed=%s",
+        state.get("message_id"),
+        state.get("confidence_score"),
+        state.get("moderation_passed"),
+    )
     return {"result": result}
 
 
