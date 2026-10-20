@@ -199,6 +199,8 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     """Standardize and log an audit event for both HITL and flagged paths. Improves observability."""
     result = state.get("result") or {}
     event_type = "flagged_for_review" if state.get("flagged_for_review") else "ready_for_hitl"
+    # Prefer explicit error if present (even on non-flagged paths)
+    error_msg = state.get("error")
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -210,7 +212,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "risk_score": state.get("risk_score"),
         "confidence_score": state.get("confidence_score"),
         "timestamp": _now_iso(),
-        "error": state.get("error"),
+        "error": error_msg,
     }
     logger.info("TwinEngine audit event: %s", audit)
     # Attach to result for callers / checkpointer consumers

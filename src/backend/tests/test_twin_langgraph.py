@@ -109,3 +109,19 @@ def test_audit_log_node_hitl_path():
     assert audit["event_type"] == "ready_for_hitl"
     assert audit["moderation_passed"] is True
     assert "audit" in out["result"]
+
+
+def test_audit_log_node_includes_error():
+    """Error paths still produce a complete audit event with the error field."""
+    state = {
+        "message_id": "msg-err",
+        "user_id": "user-err",
+        "flagged_for_review": True,
+        "error": "Message not found",
+        "result": {"status": "flagged", "recommended_action": "manual_review"},
+    }
+    out = audit_log_node(state)
+    audit = out["audit_event"]
+    assert audit["error"] == "Message not found"
+    assert audit["event_type"] == "flagged_for_review"
+    assert out["result"]["audit"]["error"] == "Message not found"
