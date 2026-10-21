@@ -9,6 +9,7 @@ Enhancements:
 - Conditional routing based on moderation_passed (flag_for_review vs await_human)
 - Explicit flag_for_review node for safety-flagged drafts
 - Dedicated audit_log_node for structured observability on both paths
+- Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
 
 Usage:
@@ -195,6 +196,27 @@ def process_decision_node(state: TwinEngineState) -> TwinEngineState:
     return {"result": result}
 
 
+def _persist_audit(db: Session | None, audit: dict, user_id: str | None) -> None:
+    """Best-effort durable write of the audit event. Never raises."""
+    if db is None or not user_id:
+        return
+    try:
+        from app.models import AuditLog
+        log = AuditLog(
+            user_id=user_id,
+            action="twin_engine_audit",
+            resource_type="Message",
+            resource_id=audit.get("message_id"),
+            details=audit,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(log)
+        db.flush()  # or commit if the caller expects it; flush keeps transaction control with caller
+        logger.debug("Persisted TwinEngine audit for message_id=%s", audit.get("message_id"))
+    except Exception as exc:
+        logger.warning("Failed to persist TwinEngine audit event: %s", exc)
+
+
 def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     """Standardize and log an audit event for both HITL and flagged paths. Improves observability."""
     result = state.get("result") or {}
@@ -217,6 +239,8 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     logger.info("TwinEngine audit event: %s", audit)
     # Attach to result for callers / checkpointer consumers
     result = {**result, "audit": audit}
+    # Best-effort durable persistence (non-blocking)
+    _persist_audit(state.get("db"), audit, state.get("user_id"))
     return {"result": result, "audit_event": audit}
 
 

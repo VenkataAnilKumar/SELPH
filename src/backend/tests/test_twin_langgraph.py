@@ -11,6 +11,7 @@ from app.services.twin_langgraph import (
     process_decision_node,
     await_human_node,
     audit_log_node,
+    _persist_audit,
 )
 
 
@@ -125,3 +126,31 @@ def test_audit_log_node_includes_error():
     assert audit["error"] == "Message not found"
     assert audit["event_type"] == "flagged_for_review"
     assert out["result"]["audit"]["error"] == "Message not found"
+
+
+def test_audit_log_node_persists_when_db_present():
+    """When a DB session is available, audit is persisted (best-effort)."""
+    mock_db = MagicMock()
+    state = {
+        "message_id": "msg-persist",
+        "user_id": "user-persist",
+        "db": mock_db,
+        "flagged_for_review": False,
+        "moderation_passed": True,
+        "result": {"status": "ready_for_decision"},
+    }
+    with patch("app.services.twin_langgraph.AuditLog") as MockAuditLog:
+        out = audit_log_node(state)
+        assert "audit_event" in out
+        # Persistence attempted
+        mock_db.add.assert_called()
+        mock_db.flush.assert_called()
+
+
+def test_persist_audit_handles_failure_gracefully():
+    """Persistence errors must not propagate."""
+    mock_db = MagicMock()
+    mock_db.add.side_effect = RuntimeError("db down")
+    audit = {"message_id": "msg-fail", "event_type": "ready_for_hitl"}
+    # Should not raise
+    _persist_audit(mock_db, audit, "user-1")
