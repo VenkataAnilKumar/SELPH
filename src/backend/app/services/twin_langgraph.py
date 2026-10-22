@@ -11,6 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
+- Audit events now capture generation_source and key metrics for end-to-end observability
 
 Usage:
     from app.services.twin_langgraph import build_twin_graph, TwinEngineState
@@ -223,6 +224,13 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     event_type = "flagged_for_review" if state.get("flagged_for_review") else "ready_for_hitl"
     # Prefer explicit error if present (even on non-flagged paths)
     error_msg = state.get("error")
+    # Selective metrics for observability without bloating the audit payload
+    metrics = state.get("generation_metrics") or {}
+    selective_metrics = {
+        k: metrics[k]
+        for k in ("llm_latency_ms", "parse_retry_count", "llm_calls", "fallback_reason")
+        if k in metrics
+    }
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -233,6 +241,8 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "moderation_flags": state.get("moderation_flags") or [],
         "risk_score": state.get("risk_score"),
         "confidence_score": state.get("confidence_score"),
+        "generation_source": state.get("generation_source"),
+        "generation_metrics": selective_metrics or None,
         "timestamp": _now_iso(),
         "error": error_msg,
     }
