@@ -10,12 +10,15 @@ All notable changes to this project are documented in this file.
 - Unit tests covering routing, flag/process nodes, audit paths (including error cases), and audit persistence.
 - ADR-001 documenting the audit logging design decision.
 - Audit events now include `generation_source` and selective `generation_metrics` (latency, retries, fallback reason) for end-to-end production observability.
+- `generate_draft_node` retries once on transient failure before erroring for improved reliability.
+- Audit events optionally include `channel` (from context) for better HITL traceability.
 
 ### Changed
 - Flag and decision nodes now return richer result payloads (status, recommended_action, timestamp, audit attachment).
 - Improved structured logging on HITL and flagged paths.
 - Audit events now include optional durable write when a DB session is supplied.
 - Enriched audit payload with generation provenance without breaking existing consumers.
+- generate_draft_node is more resilient to transient LLM/provider failures.
 
 ## [1.0.0-rc] - 2026-04-28
 

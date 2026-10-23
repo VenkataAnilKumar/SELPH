@@ -11,7 +11,8 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source and key metrics for end-to-end observability
+- Audit events now capture generation_source, selective metrics, and channel for end-to-end observability
+- generate_draft_node retries once on transient failure before erroring
 
 Usage:
     from app.services.twin_langgraph import build_twin_graph, TwinEngineState
@@ -85,25 +86,33 @@ def load_context_node(state: TwinEngineState) -> TwinEngineState:
 
 
 def generate_draft_node(state: TwinEngineState) -> TwinEngineState:
-    """Generate draft via LLM or deterministic fallback."""
+    """Generate draft via LLM or deterministic fallback. Retries once on transient failure."""
     if state.get("error"):
         return state
-    try:
-        ctx = state["ctx"]
-        draft, factors, reasoning, flags, source, metrics = TwinEngineService._generate_draft(
-            ctx, state["system_prompt"], state["user_prompt"]
-        )
-        return {
-            "draft": draft,
-            "factors": factors,
-            "generator_reasoning": reasoning,
-            "generator_flags": flags,
-            "generation_source": source,
-            "generation_metrics": metrics,
-        }
-    except Exception as exc:
-        logger.exception("generate_draft_node failed")
-        return {"error": str(exc)}
+    last_exc: Exception | None = None
+    for attempt in range(2):  # initial + one retry
+        try:
+            ctx = state["ctx"]
+            draft, factors, reasoning, flags, source, metrics = TwinEngineService._generate_draft(
+                ctx, state["system_prompt"], state["user_prompt"]
+            )
+            if attempt > 0:
+                logger.info("generate_draft_node succeeded on retry for message_id=%s", state.get("message_id"))
+            return {
+                "draft": draft,
+                "factors": factors,
+                "generator_reasoning": reasoning,
+                "generator_flags": flags,
+                "generation_source": source,
+                "generation_metrics": metrics,
+            }
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("generate_draft_node attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                continue  # retry once
+    logger.exception("generate_draft_node failed after retry")
+    return {"error": str(last_exc) if last_exc else "generation failed"}
 
 
 def score_and_moderate_node(state: TwinEngineState) -> TwinEngineState:
@@ -231,6 +240,14 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         for k in ("llm_latency_ms", "parse_retry_count", "llm_calls", "fallback_reason")
         if k in metrics
     }
+    # Optional channel for better traceability (from context when available)
+    channel = None
+    try:
+        ctx = state.get("ctx")
+        if ctx and hasattr(ctx, "message") and hasattr(ctx.message, "channel"):
+            channel = ctx.message.channel
+    except Exception:
+        pass
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -243,6 +260,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "confidence_score": state.get("confidence_score"),
         "generation_source": state.get("generation_source"),
         "generation_metrics": selective_metrics or None,
+        "channel": channel,
         "timestamp": _now_iso(),
         "error": error_msg,
     }
