@@ -1,6 +1,7 @@
 """Unit tests for TwinEngineGraph routing and core nodes."""
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -154,3 +155,20 @@ def test_persist_audit_handles_failure_gracefully():
     audit = {"message_id": "msg-fail", "event_type": "ready_for_hitl"}
     # Should not raise
     _persist_audit(mock_db, audit, "user-1")
+
+
+def test_audit_log_node_includes_graph_duration():
+    """Audit event includes graph_duration_ms when start timestamp is present."""
+    start = time.perf_counter_ns()
+    state = {
+        "message_id": "msg-dur",
+        "user_id": "user-dur",
+        "flagged_for_review": False,
+        "graph_start_ns": start,
+        "result": {"status": "ready_for_decision"},
+    }
+    out = audit_log_node(state)
+    audit = out["audit_event"]
+    assert "graph_duration_ms" in audit
+    assert isinstance(audit["graph_duration_ms"], int)
+    assert audit["graph_duration_ms"] >= 0

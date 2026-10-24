@@ -11,7 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, and channel for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, and graph duration for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Literal, TypedDict
 
@@ -60,6 +61,7 @@ class TwinEngineState(TypedDict, total=False):
     error: str | None
     flagged_for_review: bool
     audit_event: dict
+    graph_start_ns: int
 
 
 def _now_iso() -> str:
@@ -76,13 +78,18 @@ def load_context_node(state: TwinEngineState) -> TwinEngineState:
             Message.user_id == state["user_id"],
         ).first()
         if not message:
-            return {"error": "Message not found"}
+            return {"error": "Message not found", "graph_start_ns": time.perf_counter_ns()}
         ctx = TwinEngineService._load_context(db, message, state["user_id"])
         system_prompt, user_prompt = TwinEngineService._build_prompts(ctx)
-        return {"ctx": ctx, "system_prompt": system_prompt, "user_prompt": user_prompt}
+        return {
+            "ctx": ctx,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+            "graph_start_ns": time.perf_counter_ns(),
+        }
     except Exception as exc:
         logger.exception("load_context_node failed for message_id=%s", state.get("message_id"))
-        return {"error": str(exc)}
+        return {"error": str(exc), "graph_start_ns": time.perf_counter_ns()}
 
 
 def generate_draft_node(state: TwinEngineState) -> TwinEngineState:
@@ -248,6 +255,11 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
             channel = ctx.message.channel
     except Exception:
         pass
+    # Graph duration for end-to-end latency observability
+    graph_duration_ms: int | None = None
+    start_ns = state.get("graph_start_ns")
+    if isinstance(start_ns, int):
+        graph_duration_ms = int((time.perf_counter_ns() - start_ns) / 1_000_000)
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -261,6 +273,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "generation_source": state.get("generation_source"),
         "generation_metrics": selective_metrics or None,
         "channel": channel,
+        "graph_duration_ms": graph_duration_ms,
         "timestamp": _now_iso(),
         "error": error_msg,
     }

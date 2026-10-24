@@ -12,6 +12,7 @@ All notable changes to this project are documented in this file.
 - Audit events now include `generation_source` and selective `generation_metrics` (latency, retries, fallback reason) for end-to-end production observability.
 - `generate_draft_node` retries once on transient failure before erroring for improved reliability.
 - Audit events optionally include `channel` (from context) for better HITL traceability.
+- Audit events now include `graph_duration_ms` (measured from load_context) for end-to-end latency observability.
 
 ### Changed
 - Flag and decision nodes now return richer result payloads (status, recommended_action, timestamp, audit attachment).
@@ -19,6 +20,7 @@ All notable changes to this project are documented in this file.
 - Audit events now include optional durable write when a DB session is supplied.
 - Enriched audit payload with generation provenance without breaking existing consumers.
 - generate_draft_node is more resilient to transient LLM/provider failures.
+- Audit payload now includes optional graph execution duration.
 
 ## [1.0.0-rc] - 2026-04-28
 
