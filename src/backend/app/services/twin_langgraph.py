@@ -11,14 +11,14 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, channel, and graph duration for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, graph duration, and generation_attempts for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
     from app.services.twin_langgraph import build_twin_graph, TwinEngineState
     graph = build_twin_graph()
-    # config = {"configurable": {"thread_id": message_id}}
-    # result = graph.invoke({"message_id": mid, "user_id": uid, "db": db}, config)
+    # config = {\"configurable\": {\"thread_id\": message_id}}
+    # result = graph.invoke({\"message_id\": mid, \"user_id\": uid, \"db\": db}, config)
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ class TwinEngineState(TypedDict, total=False):
     generator_flags: list
     generation_source: str
     generation_metrics: dict
+    generation_attempts: int
     confidence_score: float
     confidence_label: str
     moderation_passed: bool
@@ -112,6 +113,7 @@ def generate_draft_node(state: TwinEngineState) -> TwinEngineState:
                 "generator_flags": flags,
                 "generation_source": source,
                 "generation_metrics": metrics,
+                "generation_attempts": attempt + 1,
             }
         except Exception as exc:
             last_exc = exc
@@ -119,7 +121,7 @@ def generate_draft_node(state: TwinEngineState) -> TwinEngineState:
             if attempt == 0:
                 continue  # retry once
     logger.exception("generate_draft_node failed after retry")
-    return {"error": str(last_exc) if last_exc else "generation failed"}
+    return {"error": str(last_exc) if last_exc else "generation failed", "generation_attempts": 2}
 
 
 def score_and_moderate_node(state: TwinEngineState) -> TwinEngineState:
@@ -272,6 +274,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "confidence_score": state.get("confidence_score"),
         "generation_source": state.get("generation_source"),
         "generation_metrics": selective_metrics or None,
+        "generation_attempts": state.get("generation_attempts"),
         "channel": channel,
         "graph_duration_ms": graph_duration_ms,
         "timestamp": _now_iso(),
