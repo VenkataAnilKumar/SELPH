@@ -11,7 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, channel, graph duration, and generation_attempts for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, and hitl_priority for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
@@ -262,6 +262,10 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     start_ns = state.get("graph_start_ns")
     if isinstance(start_ns, int):
         graph_duration_ms = int((time.perf_counter_ns() - start_ns) / 1_000_000)
+    # HITL prioritization signal for queueing / dashboards
+    risk = state.get("risk_score") or 0.0
+    conf = state.get("confidence_score") or 1.0
+    hitl_priority = "high" if (risk > 0.7 or conf < 0.4) else "normal"
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -272,6 +276,8 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "moderation_flags": state.get("moderation_flags") or [],
         "risk_score": state.get("risk_score"),
         "confidence_score": state.get("confidence_score"),
+        "confidence_label": state.get("confidence_label"),
+        "hitl_priority": hitl_priority,
         "generation_source": state.get("generation_source"),
         "generation_metrics": selective_metrics or None,
         "generation_attempts": state.get("generation_attempts"),

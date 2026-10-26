@@ -84,6 +84,7 @@ def test_audit_log_node_flagged_path():
         "moderation_flags": ["spam"],
         "risk_score": 0.9,
         "confidence_score": 0.1,
+        "confidence_label": "low",
         "result": {"status": "flagged", "recommended_action": "manual_review"},
     }
     out = audit_log_node(state)
@@ -92,6 +93,8 @@ def test_audit_log_node_flagged_path():
     assert audit["event_type"] == "flagged_for_review"
     assert audit["message_id"] == "msg-audit-1"
     assert audit["moderation_flags"] == ["spam"]
+    assert audit["confidence_label"] == "low"
+    assert audit["hitl_priority"] == "high"
     assert out["result"]["audit"]["event_type"] == "flagged_for_review"
 
 
@@ -104,12 +107,15 @@ def test_audit_log_node_hitl_path():
         "moderation_flags": [],
         "risk_score": 0.1,
         "confidence_score": 0.9,
+        "confidence_label": "high",
         "result": {"status": "ready_for_decision", "recommended_action": "await_human_approval"},
     }
     out = audit_log_node(state)
     audit = out["audit_event"]
     assert audit["event_type"] == "ready_for_hitl"
     assert audit["moderation_passed"] is True
+    assert audit["confidence_label"] == "high"
+    assert audit["hitl_priority"] == "normal"
     assert "audit" in out["result"]
 
 
