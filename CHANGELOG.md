@@ -16,6 +16,7 @@ All notable changes to this project are documented in this file.
 - Audit events now include `generation_attempts` (1 or 2) reflecting the generate_draft retry outcome for reliability observability.
 - Audit events now include `confidence_label` and derived `hitl_priority` (high/normal) for improved HITL queue prioritization and observability.
 - Audit events now include `error_category` (not_found / generation / moderation / timeout / unknown) for improved error observability and triage.
+- Audit events now include lightweight `context_signals` (topic_known, no_avoided_topics, generation_source, has_briefing) for grounding and twin quality observability.
 
 ### Changed
 - Flag and decision nodes now return richer result payloads (status, recommended_action, timestamp, audit attachment).
@@ -27,6 +28,7 @@ All notable changes to this project are documented in this file.
 - Audit payload now includes generation attempt count.
 - Audit payload now includes confidence label and HITL priority signal.
 - Audit payload now includes lightweight error_category for better production triage.
+- Audit payload now includes context_signals for better memory/grounding visibility.
 
 ## [1.0.0-rc] - 2026-04-28
 

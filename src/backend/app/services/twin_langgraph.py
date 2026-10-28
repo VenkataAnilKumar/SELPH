@@ -11,7 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, and error_category for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, error_category, and context_signals for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
@@ -283,6 +283,21 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     risk = state.get("risk_score") or 0.0
     conf = state.get("confidence_score") or 1.0
     hitl_priority = "high" if (risk > 0.7 or conf < 0.4) else "normal"
+    # Lightweight context / grounding signals for memory & twin quality observability
+    factors = state.get("factors") or {}
+    ctx_obj = state.get("ctx")
+    has_briefing = None
+    try:
+        if ctx_obj and hasattr(ctx_obj, "briefing"):
+            has_briefing = bool(getattr(ctx_obj, "briefing", None))
+    except Exception:
+        pass
+    context_signals = {
+        "topic_known": factors.get("topic_known"),
+        "no_avoided_topics": factors.get("no_avoided_topics"),
+        "generation_source": state.get("generation_source"),
+        "has_briefing": has_briefing,
+    }
     audit = {
         "event_type": event_type,
         "message_id": state.get("message_id"),
@@ -300,6 +315,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "generation_attempts": state.get("generation_attempts"),
         "channel": channel,
         "graph_duration_ms": graph_duration_ms,
+        "context_signals": context_signals,
         "timestamp": _now_iso(),
         "error": error_msg,
         "error_category": error_category,
