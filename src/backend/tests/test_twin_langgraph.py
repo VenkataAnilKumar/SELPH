@@ -96,6 +96,8 @@ def test_audit_log_node_flagged_path():
     assert audit["moderation_flags"] == ["spam"]
     assert audit["confidence_label"] == "low"
     assert audit["hitl_priority"] == "high"
+    assert audit["risk_band"] == "high"
+    assert audit["moderation_flag_count"] == 1
     assert "context_signals" in audit
     assert out["result"]["audit"]["event_type"] == "flagged_for_review"
 
@@ -118,6 +120,8 @@ def test_audit_log_node_hitl_path():
     assert audit["moderation_passed"] is True
     assert audit["confidence_label"] == "high"
     assert audit["hitl_priority"] == "normal"
+    assert audit["risk_band"] == "low"
+    assert audit["moderation_flag_count"] == 0
     assert "context_signals" in audit
     assert "audit" in out["result"]
 
@@ -215,3 +219,19 @@ def test_audit_log_node_includes_context_signals():
     assert signals.get("no_avoided_topics") is True
     assert signals.get("generation_source") == "llm"
     assert signals.get("has_briefing") is True
+
+
+def test_audit_log_node_includes_risk_band_and_flag_count():
+    """Audit event includes risk_band and moderation_flag_count for triage."""
+    state = {
+        "message_id": "msg-risk",
+        "user_id": "user-risk",
+        "flagged_for_review": True,
+        "moderation_flags": ["spam", "phishing"],
+        "risk_score": 0.5,
+        "result": {"status": "flagged"},
+    }
+    out = audit_log_node(state)
+    audit = out["audit_event"]
+    assert audit["risk_band"] == "medium"
+    assert audit["moderation_flag_count"] == 2

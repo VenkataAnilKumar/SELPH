@@ -11,7 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, error_category, and context_signals for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, error_category, context_signals, risk_band, and moderation_flag_count for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
@@ -283,6 +283,9 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     risk = state.get("risk_score") or 0.0
     conf = state.get("confidence_score") or 1.0
     hitl_priority = "high" if (risk > 0.7 or conf < 0.4) else "normal"
+    # Risk band for triage (complements hitl_priority)
+    risk_band = "high" if risk > 0.7 else "medium" if risk > 0.3 else "low"
+    moderation_flag_count = len(state.get("moderation_flags") or [])
     # Lightweight context / grounding signals for memory & twin quality observability
     factors = state.get("factors") or {}
     ctx_obj = state.get("ctx")
@@ -306,7 +309,9 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "recommended_action": result.get("recommended_action"),
         "moderation_passed": state.get("moderation_passed"),
         "moderation_flags": state.get("moderation_flags") or [],
+        "moderation_flag_count": moderation_flag_count,
         "risk_score": state.get("risk_score"),
+        "risk_band": risk_band,
         "confidence_score": state.get("confidence_score"),
         "confidence_label": state.get("confidence_label"),
         "hitl_priority": hitl_priority,
