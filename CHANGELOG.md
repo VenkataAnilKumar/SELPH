@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
 - Audit events now include `error_category` (not_found / generation / moderation / timeout / unknown) for improved error observability and triage.
 - Audit events now include lightweight `context_signals` (topic_known, no_avoided_topics, generation_source, has_briefing) for grounding and twin quality observability.
 - Audit events now include `risk_band` (low/medium/high derived from risk_score) and `moderation_flag_count` for improved HITL prioritization and production triage.
+- Audit events now include `priority_score` (0-1 composite from risk, confidence, flags, and errors) for finer-grained HITL queue ranking.
 
 ### Changed
 - Flag and decision nodes now return richer result payloads (status, recommended_action, timestamp, audit attachment).
@@ -31,6 +32,7 @@ All notable changes to this project are documented in this file.
 - Audit payload now includes lightweight error_category for better production triage.
 - Audit payload now includes context_signals for better memory/grounding visibility.
 - Audit payload now includes risk_band and moderation_flag_count for better safety triage.
+- Audit payload now includes priority_score for improved HITL queue ranking.
 
 ## [1.0.0-rc] - 2026-04-28
 

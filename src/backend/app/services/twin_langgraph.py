@@ -11,7 +11,7 @@ Enhancements:
 - Dedicated audit_log_node for structured observability on both paths
 - Optional durable persistence of audit events to the AuditLog table
 - Better error handling, structured logging, and enriched result payloads for HITL/audit
-- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, error_category, context_signals, risk_band, moderation_flag_count, draft_char_count, and context_quality_score for end-to-end observability
+- Audit events now capture generation_source, selective metrics, channel, graph duration, generation_attempts, confidence_label, hitl_priority, error_category, context_signals, risk_band, moderation_flag_count, draft_char_count, context_quality_score, and priority_score for end-to-end observability
 - generate_draft_node retries once on transient failure before erroring
 
 Usage:
@@ -300,6 +300,11 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     # Risk band for triage (complements hitl_priority)
     risk_band = "high" if risk > 0.7 else "medium" if risk > 0.3 else "low"
     moderation_flag_count = len(state.get("moderation_flags") or [])
+    # Composite priority_score (0-1) for finer-grained HITL queue ranking
+    # Weights: risk (0.5), low-confidence (0.3), flags (up to 0.3), error presence (0.2)
+    flag_penalty = min(moderation_flag_count, 3) * 0.1
+    error_boost = 0.2 if error_category else 0.0
+    priority_score = round(min(1.0, (risk * 0.5) + ((1.0 - conf) * 0.3) + flag_penalty + error_boost), 2)
     # Lightweight context / grounding signals for memory & twin quality observability
     factors = state.get("factors") or {}
     ctx_obj = state.get("ctx")
@@ -332,6 +337,7 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
         "confidence_score": state.get("confidence_score"),
         "confidence_label": state.get("confidence_label"),
         "hitl_priority": hitl_priority,
+        "priority_score": priority_score,
         "generation_source": state.get("generation_source"),
         "generation_metrics": selective_metrics or None,
         "generation_attempts": state.get("generation_attempts"),

@@ -100,6 +100,9 @@ def test_audit_log_node_flagged_path():
     assert audit["hitl_priority"] == "high"
     assert audit["risk_band"] == "high"
     assert audit["moderation_flag_count"] == 1
+    assert "priority_score" in audit
+    assert isinstance(audit["priority_score"], float)
+    assert 0.0 <= audit["priority_score"] <= 1.0
     assert "context_signals" in audit
     assert "context_quality_score" in audit
     assert "draft_char_count" in audit
@@ -128,6 +131,9 @@ def test_audit_log_node_hitl_path():
     assert audit["hitl_priority"] == "normal"
     assert audit["risk_band"] == "low"
     assert audit["moderation_flag_count"] == 0
+    assert "priority_score" in audit
+    assert isinstance(audit["priority_score"], float)
+    assert audit["priority_score"] < 0.5  # low risk + high confidence should score low
     assert "context_signals" in audit
     assert "context_quality_score" in audit
     assert audit["draft_char_count"] == len("ready draft")
@@ -148,6 +154,8 @@ def test_audit_log_node_includes_error():
     assert audit["error"] == "Message not found"
     assert audit["event_type"] == "flagged_for_review"
     assert audit["error_category"] == "not_found"
+    assert "priority_score" in audit
+    assert audit["priority_score"] > 0.1  # error boost should raise the score
     assert "context_signals" in audit
     assert "context_quality_score" in audit
     assert out["result"]["audit"]["error"] == "Message not found"
@@ -231,6 +239,7 @@ def test_audit_log_node_includes_context_signals():
     assert signals.get("has_briefing") is True
     assert audit["context_quality_score"] == 1.0  # all signals present
     assert audit["draft_char_count"] == len("context-aware draft")
+    assert "priority_score" in audit
 
 
 def test_audit_log_node_includes_risk_band_and_flag_count():
@@ -247,6 +256,7 @@ def test_audit_log_node_includes_risk_band_and_flag_count():
     audit = out["audit_event"]
     assert audit["risk_band"] == "medium"
     assert audit["moderation_flag_count"] == 2
+    assert "priority_score" in audit
 
 
 def test_compute_context_quality_score():
