@@ -82,3 +82,7 @@ dist/
 # Railway
 .railway/
 railway.json
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts

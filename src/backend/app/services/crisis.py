@@ -13,7 +13,12 @@ class CrisisService:
     @staticmethod
     def get_twin_mode(db: Session, user_id: str) -> str:
         twin = db.query(Twin).filter(Twin.user_id == user_id).first()
-        return twin.twin_operating_mode if twin else "normal"
+        if not twin:
+            return "normal"
+        # The one-tap pause sets twin.status; it must always stop drafting.
+        if twin.status == "paused":
+            return "manual_pause"
+        return twin.twin_operating_mode
 
     @staticmethod
     def get_active_surge_event(db: Session, user_id: str) -> SurgeEvent | None:

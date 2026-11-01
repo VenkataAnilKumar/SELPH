@@ -18,6 +18,7 @@ import logging
 import time
 from sqlalchemy.orm import Session
 from app.models import Message, Twin, IdentityProfile, Topic, TwinBriefing
+from app.services.fallback_drafter import DraftInputs, build_fallback_draft
 from app.services.moderation import ModerationService
 from app.config import get_settings
 
@@ -388,16 +389,19 @@ class TwinEngineService:
             except Exception as exc:
                 logger.warning("LLM draft generation failed, using deterministic fallback: %s", exc)
 
-        if ctx.message.channel == "gmail":
-            opening = f"Hi {ctx.message.sender_name},"
-            body = "Thanks for your message. I appreciate you reaching out."
-            follow_up = "Here is a quick response from my side based on what you shared."
-            closing = "Best regards"
-            draft = f"{opening}\n\n{body} {follow_up}\n\n{closing}"
-        else:
-            body = "Thanks for the message. I appreciate you reaching out and sharing this."
-            follow_up = "Happy to help and continue the conversation from here."
-            draft = f"Hey {ctx.message.sender_name}! {body} {follow_up}"
+        draft = build_fallback_draft(
+            DraftInputs(
+                sender_name=ctx.message.sender_name,
+                content=ctx.message.content,
+                channel=ctx.message.channel,
+                tone=ctx.twin.tone,
+                avg_response_length=ctx.twin.avg_response_length,
+                known_topics=ctx.known_topics,
+                availability_notes=[
+                    b.content for b in ctx.active_briefings if b.briefing_type == "availability"
+                ],
+            )
+        )
 
         draft = TwinEngineService._apply_word_limit(draft, ctx.constraints.max_words)
 
@@ -459,7 +463,7 @@ class TwinEngineService:
         confidence_score = TwinEngineService._compute_overall_confidence(factors)
         confidence_label = ModerationService.get_confidence_label(confidence_score)
 
-        moderation_passed, flags, risk_score = ModerationService.check_content_safety(draft)
+        moderation_passed, flags, risk_score = ModerationService.moderate_reply(message.content, draft)
 
         if not moderation_passed:
             confidence_score = min(confidence_score, 0.3)

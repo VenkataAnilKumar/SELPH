@@ -3,72 +3,93 @@ Content moderation and safety service
 Phase 0: Safety baseline checks
 """
 
+import re
+
+# (regex, risk, category). Regexes use word boundaries so "skills" never matches "kill".
+_SAFETY_RULES: list[tuple[str, float, str]] = [
+    # Violence / threats
+    (r"\bkill(?:s|ed|ing|er)?\b", 0.9, "violence"),
+    (r"\bhurt(?:s|ing)?\b", 0.8, "violence"),
+    (r"\bbomb(?:s|ing)?\b", 0.95, "violence"),
+    (r"\bgun violence\b", 0.95, "violence"),
+    # Self-harm
+    (r"\bsuicid(?:e|al)\b", 0.95, "self_harm"),
+    (r"\bself[- ]harm\b", 0.95, "self_harm"),
+    # Illegal activity
+    (r"\billegal drugs?\b", 0.9, "illegal"),
+    (r"\bhack(?:s|ed|ing|er|ers)?\b(?!athon)", 0.7, "illegal"),
+    (r"\bsteal(?:s|ing)?\b", 0.8, "illegal"),
+    # Adult content
+    (r"\bexplicit sex\b", 0.9, "adult"),
+    # Discrimination
+    (r"\bhate(?:d|s)?\b", 0.8, "discrimination"),
+    (r"\bracist\b", 0.95, "discrimination"),
+    (r"\bsexist\b", 0.95, "discrimination"),
+    # Hard blocks: the twin must never give financial, legal or medical direction on its own.
+    (r"\b(?:wire|transfer|send)\s+(?:the\s+)?(?:money|funds|payment)\b", 0.9, "hard_block_financial"),
+    (r"\b(?:bank account|routing number|credit card number|iban|seed phrase|private key)\b", 0.9, "hard_block_financial"),
+    (r"\bguarantee[sd]?\s+(?:you\s+)?(?:returns?|profits?)\b", 0.9, "hard_block_financial"),
+    (r"\b(?:legal advice|you should sue|sign the contract|you are liable|statute of limitations)\b", 0.9, "hard_block_legal"),
+    (r"\b\d+\s?(?:mg|mcg|ml)\b", 0.9, "hard_block_medical"),
+    (r"\b(?:diagnos(?:e|is|ed)|prescri(?:be|ption)|dosage|medical advice)\b", 0.9, "hard_block_medical"),
+]
+
+# Untrusted inbound text trying to steer the twin.
+_INJECTION_RULES: list[tuple[str, float]] = [
+    (r"ignore (?:all |any |the )?(?:previous|prior|above|earlier) (?:instructions|prompts?|rules)", 0.9),
+    (r"disregard (?:all |any |the )?(?:previous|prior|above|earlier|your) (?:instructions|prompts?|rules)", 0.9),
+    (r"\b(?:reveal|show|print|repeat) (?:me )?(?:your|the) (?:system )?prompt\b", 0.9),
+    (r"\byou are now\b.{0,40}\b(?:dan|jailbroken|unfiltered|developer mode)\b", 0.9),
+    (r"\bnew instructions\s*:", 0.8),
+    (r"\bact as (?:if you (?:are|were)|the)\b.{0,40}\b(?:owner|admin|system)\b", 0.8),
+]
+
+_COMPILED_SAFETY = [(re.compile(p, re.IGNORECASE), r, c) for p, r, c in _SAFETY_RULES]
+_COMPILED_INJECTION = [(re.compile(p, re.IGNORECASE), r) for p, r in _INJECTION_RULES]
+
+PASS_THRESHOLD = 0.7
+
+
 class ModerationService:
-    """Service for content moderation and safety checks"""
-    
-    # Phase 0 Safety Baseline: Simple rule-based checks
-    # Future: Replace with OpenAI Moderation API or Claude content policy
-    
-    SENSITIVE_PATTERNS = [
-        # Violence/threats
-        ("kill", 0.9),
-        ("hurt", 0.8),
-        ("bomb", 0.95),
-        ("gun violence", 0.95),
-        
-        # Self-harm
-        ("suicide", 0.95),
-        ("self-harm", 0.95),
-        
-        # Illegal activities
-        ("illegal drug", 0.9),
-        ("hack", 0.7),
-        ("steal", 0.8),
-        
-        # Adult content
-        ("explicit sex", 0.9),
-        
-        # Discrimination
-        ("hate", 0.8),
-        ("racist", 0.95),
-        ("sexist", 0.95),
-    ]
-    
+    """Rule-based content moderation and safety checks (local, no external API)."""
+
     @staticmethod
     def check_content_safety(content: str) -> tuple[bool, list, float]:
         """
-        Check if content passes safety baseline
-        
-        Phase 0 implementation: Rule-based pattern matching
-        Future: Integrate Claude content policy or OpenAI Moderation
-        
-        Args:
-            content: Text to check
-        
-        Returns:
-            (passed: bool, flags: list, risk_score: float)
-            - passed: True if content is safe
-            - flags: List of flagged patterns
-            - risk_score: 0.0-1.0 confidence that content is unsafe
+        Check generated content against safety and hard-block rules.
+
+        Returns (passed, flags, risk_score). Each flag has `pattern`, `risk` and `category`.
         """
-        content_lower = content.lower()
         flags = []
         max_risk = 0.0
-        
-        # Check against sensitive patterns
-        for pattern, risk in ModerationService.SENSITIVE_PATTERNS:
-            if pattern in content_lower:
-                flags.append({
-                    "pattern": pattern,
-                    "risk": risk,
-                })
+        for rx, risk, category in _COMPILED_SAFETY:
+            match = rx.search(content or "")
+            if match:
+                flags.append({"pattern": match.group(0).lower(), "risk": risk, "category": category})
                 max_risk = max(max_risk, risk)
-        
-        # Threshold: if any flag > 0.7, content fails
-        passed = max_risk < 0.7
-        
-        return passed, flags, max_risk
-    
+        return max_risk < PASS_THRESHOLD, flags, max_risk
+
+    @staticmethod
+    def check_prompt_injection(content: str) -> list:
+        """Flag inbound messages that try to override the twin's instructions."""
+        flags = []
+        for rx, risk in _COMPILED_INJECTION:
+            match = rx.search(content or "")
+            if match:
+                flags.append({"pattern": match.group(0).lower(), "risk": risk, "category": "prompt_injection"})
+        return flags
+
+    @staticmethod
+    def moderate_reply(incoming: str, draft: str) -> tuple[bool, list, float]:
+        """Moderate a drafted reply plus the untrusted inbound message that triggered it."""
+        passed, flags, risk = ModerationService.check_content_safety(draft)
+        injection = ModerationService.check_prompt_injection(incoming)
+        if injection:
+            flags = flags + injection
+            risk = max([risk] + [f["risk"] for f in injection])
+            passed = risk < PASS_THRESHOLD
+        return passed, flags, risk
+
     @staticmethod
     def get_confidence_label(score: float) -> str:
         """

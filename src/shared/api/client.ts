@@ -2,8 +2,7 @@
  * Shared API client for web and mobile
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios'
-import { ApiResponse } from '../types'
+import axios, { AxiosInstance } from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { SimulateMessage } from "@/components/simulate-message";
 import { useAuth } from "@/lib/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { apiClient } from "@selph/shared";
@@ -614,6 +615,8 @@ export default function DashboardPage() {
               </button>
             </section>
           )}
+
+          <SimulateMessage onIngested={refreshDashboard} />
 
           <section className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
             <div className="rounded-lg bg-white p-8 shadow">

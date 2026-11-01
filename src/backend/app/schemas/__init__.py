@@ -20,6 +20,8 @@ from app.schemas.twin import (
     TwinPerformanceSummaryResponse,
     UpdateTwinRequest,
     MessageResponse,
+    MessageIngestRequest,
+    MessageIngestResponse,
     DraftResponse,
     DraftApprovalRequest,
     DraftVoiceGenerateRequest,
@@ -106,6 +108,8 @@ __all__ = [
     "UpdateTwinRequest",
     # Messages & Drafts
     "MessageResponse",
+    "MessageIngestRequest",
+    "MessageIngestResponse",
     "DraftResponse",
     "DraftApprovalRequest",
     "DraftVoiceGenerateRequest",

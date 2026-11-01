@@ -31,6 +31,7 @@ from typing import Any, Literal, TypedDict
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
+from app.models import AuditLog
 from app.services.twin_engine import TwinEngineService
 from app.services.moderation import ModerationService
 
@@ -148,7 +149,7 @@ def score_and_moderate_node(state: TwinEngineState) -> TwinEngineState:
         factors = state["factors"]
         confidence_score = TwinEngineService._compute_overall_confidence(factors)
         confidence_label = ModerationService.get_confidence_label(confidence_score)
-        moderation_passed, flags, risk_score = ModerationService.check_content_safety(state["draft"])
+        moderation_passed, flags, risk_score = ModerationService.moderate_reply(state["ctx"].message.content, state["draft"])
         if not moderation_passed:
             confidence_score = min(confidence_score, 0.3)
             confidence_label = ModerationService.get_confidence_label(confidence_score)
@@ -236,7 +237,6 @@ def _persist_audit(db: Session | None, audit: dict, user_id: str | None) -> None
     if db is None or not user_id:
         return
     try:
-        from app.models import AuditLog
         log = AuditLog(
             user_id=user_id,
             action="twin_engine_audit",

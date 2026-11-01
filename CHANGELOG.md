@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-11 (local-first hardening)
+
+### Added
+- `POST /v1/messages/ingest`: ingest a message and generate its draft inline (no Celery, channel, or LLM needed).
+- Intent-aware fallback drafter (`fallback_drafter.py`): tone/length/briefing aware, never fabricates facts.
+- Moderation: word-boundary safety rules, hard blocks (financial/legal/medical), prompt-injection detection; flags carry a `category`.
+- Web dashboard "Simulate Incoming Message" panel; `next build` added to CI.
+- Migration `009_model_schema_drift_fix` and a CI drift guard (`test_migration_schema_drift.py`).
+- `scripts/local_e2e.py`: scripted end-to-end walkthrough against a running API.
+
+### Fixed
+- Signup returned 500 on migrated databases (`users.push_token` and draft telemetry columns had no migration).
+- One-tap pause did not stop drafting (pause set `twin.status`; the pipeline only checked `twin_operating_mode`).
+- Moderation false positives ("skills" matched "kill", "hackathon" matched "hack").
+- `twin_langgraph` audit-persistence test failure (module-level `AuditLog` import).
+- Web production build failed on unused imports and test typings.
+- Root `docker-compose.yml`: wrong build context, missing migrations on start, invalid pgvector image tag.
+- `DEMO.md` documented endpoints and fields that did not exist; rewritten from verified calls.
+
 ## [Unreleased] - 2026-11
 
 ### Added
