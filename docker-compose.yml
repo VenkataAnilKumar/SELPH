@@ -1,9 +1,8 @@
-version: '3.8'
 
 services:
   # PostgreSQL 16 with pgvector
   postgres:
-    image: pgvector/pgvector:pg16-latest
+    image: pgvector/pgvector:pg16
     container_name: selph-postgres
     environment:
       POSTGRES_USER: selph
@@ -42,7 +41,7 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: .
+      context: ./src/backend
       dockerfile: Dockerfile
     container_name: selph-backend
     environment:
@@ -53,10 +52,14 @@ services:
       ENVIRONMENT: development
       DEBUG: "true"
       JWT_SECRET_KEY: dev-secret-key-change-in-production
+      FEATURE_TWIN_LLM_DRAFTS: ${FEATURE_TWIN_LLM_DRAFTS:-false}
+      DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-claude-sonnet-4-6}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_LEVEL: INFO
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,7 +78,7 @@ services:
   # Celery Worker for draft generation and async tasks
   celery_worker:
     build:
-      context: .
+      context: ./src/backend
       dockerfile: Dockerfile
     container_name: selph-celery-worker
     environment:
@@ -98,7 +101,7 @@ services:
   # Celery Flower for monitoring
   flower:
     build:
-      context: .
+      context: ./src/backend
       dockerfile: Dockerfile
     container_name: selph-flower
     environment:

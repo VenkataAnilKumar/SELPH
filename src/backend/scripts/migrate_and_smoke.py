@@ -94,8 +94,8 @@ def main() -> int:
     parser.add_argument("--skip-tests", action="store_true", help="Skip pytest smoke step")
     parser.add_argument(
         "--test-path",
-        default="tests/test_phase10_end_to_end.py",
-        help="Smoke test path to run (default: tests/test_phase10_end_to_end.py)",
+        default="tests/test_phase10_end_to_end.py tests/test_migration_schema_drift.py",
+        help="Space-separated smoke test paths to run",
     )
     parser.add_argument(
         "--alembic-config",
@@ -129,7 +129,7 @@ def main() -> int:
             return code
 
     if not args.skip_tests:
-        code = _run([sys.executable, "-m", "pytest", args.test_path, "-q"], cwd=root)
+        code = _run([sys.executable, "-m", "pytest", *args.test_path.split(), "-q"], cwd=root)
         if code != 0:
             return code
 

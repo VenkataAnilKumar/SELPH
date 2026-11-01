@@ -9,10 +9,56 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import User
 from app.services import MessageService
-from app.schemas import MessageResponse
+from app.schemas import MessageResponse, MessageIngestRequest, MessageIngestResponse
 from typing import List
 
 router = APIRouter(tags=["messages"])
+
+
+@router.post("/ingest", response_model=MessageIngestResponse, status_code=status.HTTP_201_CREATED)
+async def ingest_message(
+    request: MessageIngestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Ingest an incoming message and run the twin pipeline inline.
+
+    Works without Celery or any channel integration, so the full
+    message -> draft -> approve loop can be exercised locally. Uses the LLM when
+    configured, otherwise the deterministic fallback drafter.
+    """
+    from app.tasks.draft_generation import run_draft_generation
+
+    message = MessageService.create_message(
+        db,
+        user_id=current_user.id,
+        channel=request.channel,
+        sender_id=request.sender_id,
+        sender_name=request.sender_name or request.sender_id,
+        content=request.content,
+        channel_metadata=request.metadata,
+    )
+
+    try:
+        result = run_draft_generation(db, message.id, current_user.id)
+    except Exception as exc:  # message is stored; surface a clear failure
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Message {message.id} saved but draft generation failed: {exc}",
+        )
+
+    db.refresh(message)
+    return MessageIngestResponse(
+        message_id=message.id,
+        status=message.status,
+        routing_action=result.get("routing_action"),
+        tier=result.get("tier"),
+        draft_id=result.get("draft_id"),
+        generation_source=result.get("generation_source"),
+        detail=result.get("reason"),
+    )
 
 
 @router.get("/", response_model=List[MessageResponse])

@@ -45,6 +45,9 @@ jobs:
       - name: Run web tests
         run: npm test --workspace=src/web -- --runInBand --ci
 
+      - name: Build web
+        run: npm run build --workspace=src/web
+
   test-mobile:
     name: Mobile Tests
     runs-on: ubuntu-latest

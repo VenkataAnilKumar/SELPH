@@ -97,14 +97,14 @@ You record your voice. Your face. Your words. Your expertise.
 
 | Layer | Technology |
 |---|---|
-| AI | LiteLLM · 140+ models · BYOK · Ollama local option |
+| AI | Built-in fallback drafter (no key needed) · LiteLLM for 140+ models · BYOK · local models via LiteLLM (e.g. `ollama/...`) |
 | Orchestration | LangGraph — interruptible, human-in-the-loop |
-| Voice | Chatterbox (open-source) · ElevenLabs (optional) |
+| Voice | ElevenLabs (optional) · mock provider for local use · *open-source Chatterbox: roadmap* |
 | Avatar | Open-source MIT default · HeyGen (optional) |
 | Backend | FastAPI · PostgreSQL + pgvector · async task queue |
 | Apps | Next.js web · React Native mobile (iOS + Android) |
 | Channels | Instagram DMs · Gmail · (more coming) |
-| Compliance | GDPR · CCPA · EU AI Act · C2PA watermarking |
+| Compliance | Consent records · audit log · signed message verification · privacy modes · *C2PA watermarking: roadmap* |
 
 <br/>
 
@@ -120,16 +120,21 @@ You record your voice. Your face. Your words. Your expertise.
 
 ## Get Started
 
+No LLM key, Instagram or Gmail account needed to try the full approval loop locally.
+
 ```bash
 git clone https://github.com/VenkataAnilKumar/selph.git
-cd selph && cp .env.example .env
-# Add your LLM API key
-docker compose up --build
+cd selph
+docker compose up --build        # Postgres + pgvector, Redis, API (runs migrations), worker
+npm ci && cd src/web && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
 ```
 
-API live at `http://localhost:8000` · Docs at `http://localhost:8000/docs`
+API at `http://localhost:8000` · Docs at `http://localhost:8000/docs` · Web app at `http://localhost:3000`
 
-**[Full walkthrough with live API calls →](DEMO.md)**
+Sign up, then use **Simulate Incoming Message** on the dashboard to watch your twin draft a reply and approve it.
+Add an LLM key later for richer drafts. Prefer no Docker? See the manual setup in the walkthrough.
+
+**[Full walkthrough with real API calls →](DEMO.md)**
 
 <br/>
 

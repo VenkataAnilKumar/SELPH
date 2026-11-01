@@ -2,7 +2,7 @@
 Pydantic schemas for Twin endpoints
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
@@ -101,6 +101,26 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MessageIngestRequest(BaseModel):
+    """Manually ingest an incoming message (local testing, imports, custom channels)"""
+    channel: str = Field(default="manual", min_length=1, max_length=50)
+    sender_id: str = Field(..., min_length=1, max_length=200)
+    sender_name: Optional[str] = Field(default=None, max_length=200)
+    content: str = Field(..., min_length=1, max_length=10000)
+    metadata: dict = Field(default_factory=dict)
+
+
+class MessageIngestResponse(BaseModel):
+    """Result of ingesting a message and running the twin pipeline"""
+    message_id: str
+    status: str
+    routing_action: Optional[str] = None
+    tier: Optional[int] = None
+    draft_id: Optional[str] = None
+    generation_source: Optional[str] = None
+    detail: Optional[str] = None
 
 
 class DraftResponse(BaseModel):
