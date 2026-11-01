@@ -17,7 +17,7 @@ celery==5.3.4
 flower==2.0.1
 
 # LLM & AI
-litellm==1.32.1
+litellm==1.53.9
 langchain==0.1.8
 langchain-community==0.0.21
 langgraph==0.0.29
