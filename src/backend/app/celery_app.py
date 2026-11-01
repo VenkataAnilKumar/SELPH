@@ -18,6 +18,23 @@ celery_app = Celery(
 # Celery configuration
 celery_app.conf.update(
     broker_connection_retry_on_startup=True,  # keep retrying the broker at boot (Celery 6 default)
+    # Never let a Redis outage freeze an API request. Nothing reads task results (callers only
+    # keep the task id), so publishing must not touch the result backend at all; before this,
+    # `.delay()` retried an unreachable result backend with no practical limit.
+    task_ignore_result=True,
+    # Bound the broker connection attempt made when publishing from the API process.
+    broker_connection_timeout=1,
+    broker_transport_options={
+        "max_retries": 1,
+        "interval_start": 0,
+        "interval_step": 0.2,
+        "interval_max": 0.5,
+        "socket_connect_timeout": 1,
+        "socket_timeout": 2,
+    },
+    task_publish_retry_policy={"max_retries": 1, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5},
+    redis_socket_connect_timeout=1,
+    redis_socket_timeout=2,
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

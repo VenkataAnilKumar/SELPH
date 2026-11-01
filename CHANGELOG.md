@@ -5,6 +5,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased] - 2026-11 (fix round)
 
 ### Fixed
+- **A Redis outage froze API requests** (ingest, approve, anything that queues a job): `.delay()` retried an unreachable Celery result backend with no practical limit. Publishing no longer touches the result backend and broker retries are bounded; with Redis down, ingest now returns in ~0.1s and still creates the draft. Also made backend CI hang for 12+ minutes (no Redis service there).
 - `JWT_EXPIRATION_HOURS` / `JWT_REFRESH_EXPIRATION_DAYS` were ignored (24 h / 7 d were hardcoded).
 - bcrypt/passlib logged a traceback on every startup (pinned `bcrypt==4.0.1`).
 - Auth rate limiter was per-process and leaked memory per client; now Redis-backed with bounded in-process fallback, and also covers token refresh.

@@ -2,6 +2,7 @@
 Backend test configuration and fixtures
 """
 
+import os
 import pytest
 import asyncio
 from sqlalchemy import create_engine, StaticPool
@@ -13,6 +14,11 @@ from pathlib import Path
 # Add backend to path
 backend_path = Path(__file__).parent.parent / "src" / "backend"
 sys.path.insert(0, str(backend_path))
+
+# Tests must never need a reachable Redis: publish Celery jobs to an in-memory broker.
+# (Set before the app imports its settings.) Real-broker wiring is covered by test_celery_wiring.
+os.environ.setdefault("CELERY_BROKER_URL", "memory://")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 
 from app.main import app
 from app.database import Base, get_db
