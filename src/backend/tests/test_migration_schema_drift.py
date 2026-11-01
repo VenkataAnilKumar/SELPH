@@ -3,7 +3,7 @@
 SQLite-based unit tests build tables from the models, so a column that was never
 added by a migration (e.g. users.push_token) only fails in a real deployment.
 This runs in the CI migration-smoke job (DATABASE_URL points at a migrated Postgres)
-and is skipped otherwise.
+and is skipped when DATABASE_URL is not Postgres or the database is not migrated.
 """
 
 import os
@@ -24,6 +24,8 @@ def test_models_match_migrated_schema():
 
     inspector = inspect(create_engine(DATABASE_URL))
     db_tables = set(inspector.get_table_names())
+    if "alembic_version" not in db_tables:
+        pytest.skip("database has not been migrated (no alembic_version table)")
     problems = []
 
     for table in Base.metadata.sorted_tables:
