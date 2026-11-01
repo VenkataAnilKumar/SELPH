@@ -20,6 +20,13 @@ from app.crypto import is_encrypted, reencrypt_secret  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 
 
+# (table, column) pairs encrypted at rest by app.crypto.
+TARGETS = (
+    ("channel_credentials", "credential_value"),
+    ("twin_certificates", "private_key_ref"),
+)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true")
@@ -27,20 +34,24 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        # Raw SQL on purpose: bypass the ORM type so we see exactly what is stored.
-        rows = db.execute(text("SELECT id, credential_value FROM channel_credentials")).fetchall()
-        plaintext = sum(1 for _, value in rows if not is_encrypted(value))
-        print(f"{len(rows)} credential rows, {plaintext} stored as plaintext")
+        total = 0
+        for table, column in TARGETS:
+            # Raw SQL on purpose: bypass the ORM type so we see exactly what is stored.
+            rows = db.execute(text(f"SELECT id, {column} FROM {table}")).fetchall()
+            plaintext = sum(1 for _, value in rows if not is_encrypted(value))
+            print(f"{table}.{column}: {len(rows)} rows, {plaintext} stored as plaintext")
+            if args.apply:
+                for row_id, value in rows:
+                    db.execute(
+                        text(f"UPDATE {table} SET {column} = :v WHERE id = :i"),
+                        {"v": reencrypt_secret(value), "i": row_id},
+                    )
+                total += len(rows)
         if not args.apply:
             print("Dry run; pass --apply to encrypt.")
             return 0
-        for row_id, value in rows:
-            db.execute(
-                text("UPDATE channel_credentials SET credential_value = :v WHERE id = :i"),
-                {"v": reencrypt_secret(value), "i": row_id},
-            )
         db.commit()
-        print(f"Encrypted {len(rows)} rows.")
+        print(f"Encrypted {total} values.")
     finally:
         db.close()
     return 0

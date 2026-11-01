@@ -1,5 +1,4 @@
 import * as SecureStore from 'expo-secure-store'
-import React from 'react'
 import { fireEvent, render, waitFor } from '@testing-library/react-native'
 import { mobileAuthStorage } from '../lib/auth-storage'
 import { MobileAuthProvider, useMobileAuth } from '../lib/auth-context'

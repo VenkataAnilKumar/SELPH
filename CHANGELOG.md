@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-11 (fix round)
+
+### Fixed
+- `JWT_EXPIRATION_HOURS` / `JWT_REFRESH_EXPIRATION_DAYS` were ignored (24 h / 7 d were hardcoded).
+- bcrypt/passlib logged a traceback on every startup (pinned `bcrypt==4.0.1`).
+- Auth rate limiter was per-process and leaked memory per client; now Redis-backed with bounded in-process fallback, and also covers token refresh.
+- Approving a draft never delivered the reply. It now queues delivery for clean drafts on connected channels (`AUTO_SEND_ON_APPROVE`), retries transient channel failures, and a draft can no longer be decided twice (atomic claim), so a reply cannot be delivered twice.
+- Twin signing secrets were stored in plaintext; now encrypted at rest.
+- Mobile had 9 TypeScript errors; CI now typechecks web, landing and mobile.
+
+### Added
+- Right to erasure: `DELETE /v1/privacy/account` with a signed, publicly verifiable deletion certificate (`GET /v1/privacy/deletion-certificates/{id}`); audit logs retained anonymized.
+- Right to portability: `GET /v1/privacy/export` (secrets excluded).
+
 ## [Unreleased] - 2026-11 (local-first hardening)
 
 ### Added

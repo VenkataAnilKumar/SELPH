@@ -16,6 +16,12 @@ Run all of them with `cd src/backend && pytest tests/test_token_revocation.py te
 | S9 | Drafts never invent commitments | Replies contain no invented numbers, prices, links, or promises | `services/fallback_drafter.py` | `test_golden_evals.py` (gate: >= 95%, currently 100%) |
 | S10 | Approval is mandatory | No endpoint sends a reply without a user decision on the draft | `routers/drafts.py`, `routers/channels.py::send-reply` | `test_acceptance.py`, `test_endpoints.py` |
 | S11 | Readiness reflects security posture | `/ready` reports insecure JWT secret, missing encryption key, and missing webhook secrets | `routers/health.py` | `test_readiness_reports_missing_key_in_production` |
+| S13 | Twin signing secrets encrypted at rest | The HMAC secret behind each twin's signed replies is stored as `enc:v1:...`; legacy plaintext still signs and is migrated by `scripts/encrypt_credentials.py` | `models/twin_certificate.py`, `crypto.py` | `test_twin_signing_secret_is_encrypted_in_the_database`, `test_legacy_plaintext_twin_secret_still_signs` |
+| S14 | Auth throttling holds across replicas | Login, signup and refresh are limited per client in Redis, degrade to an in-process counter if Redis is down, and never grow memory without bound | `ratelimit.py` | `test_auth_hardening.py` |
+| S15 | Token lifetimes are configurable | `JWT_EXPIRATION_HOURS` and `JWT_REFRESH_EXPIRATION_DAYS` actually control token lifetime | `services/auth.py` | `test_token_lifetimes_come_from_settings` |
+| S16 | Delivery happens once, only when approved | Approve/edit queues delivery only for clean drafts on connected channels; a draft cannot be decided twice (atomic claim); the service refuses unapproved drafts; transient channel failures retry | `services/draft.py`, `services/channel.py`, `tasks/send_reply.py` | `test_delivery_on_approve.py`, `test_service_refuses_to_send_unapproved_drafts` |
+| S17 | Right to erasure | `DELETE /v1/privacy/account` (password + exact confirmation phrase) removes every row of the user in one transaction, keeps audit logs anonymized, and returns a signed, publicly verifiable deletion certificate | `services/erasure.py`, `routers/privacy.py` | `test_erasure.py` (also verified against Postgres with enforced foreign keys) |
+| S18 | Right to portability | `GET /v1/privacy/export` returns the user's data as JSON with secrets excluded and never includes other users' data | `services/erasure.py` | `test_export_contains_own_data_and_no_secrets` |
 | S12 | Metrics not publicly exposed | `/metrics` is token-protected, and hidden in production without a token | `routers/health.py` | `test_metrics_token_protects_endpoint`, `test_metrics_hidden_in_production_*` |
 
 ## Production checklist
@@ -26,9 +32,13 @@ Run all of them with `cd src/backend && pytest tests/test_token_revocation.py te
 - [ ] `ALLOW_UNSIGNED_WEBHOOKS` is `false` (ignored in production anyway)
 - [ ] `METRICS_TOKEN` set and configured in the Prometheus scrape job
 - [ ] `/ready` returns `ok=true` for every check
+- [ ] `python scripts/encrypt_credentials.py --apply` run after enabling the encryption key (covers channel tokens and twin signing secrets)
+- [ ] `JWT_EXPIRATION_HOURS` set deliberately (shorter is safer; clients can refresh with the refresh token)
+- [ ] Run behind a proxy? Start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so the rate limiter sees real client IPs
 
 ## Known gaps (not covered here)
 
-- Access tokens still live 24 h by default; revocation closes the logout gap, but a shorter TTL with refresh would reduce exposure further.
-- The per-process auth rate limiter is in-memory; a multi-replica deployment needs a shared (Redis) limiter.
-- Deletion certificates for the privacy workflow are specified in `SELPH_Privacy-Consent.md` but not yet implemented.
+- Voice/avatar models held by third-party providers are not deleted on account erasure: the provider integration has no deletion API. The deletion certificate says so; request deletion from the provider directly.
+- No confirmation email is sent after erasure (SELPH has no outbound email service); the certificate is the confirmation.
+- Erasing an account also deletes twin-to-twin sessions it took part in, including the counterparty's copy of that session.
+- Deletion certificates are signed with `CERTIFICATE_SIGNING_KEY` (or the JWT secret); rotating the key stops old certificates from verifying.

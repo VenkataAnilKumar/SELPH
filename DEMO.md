@@ -171,7 +171,12 @@ curl -s -X POST $BASE/drafts/DRAFT_ID/approve -H "$AUTH" -H "Content-Type: appli
 curl -s -X POST $BASE/drafts/DRAFT_ID/approve -H "$AUTH" -H "Content-Type: application/json" -d '{"action": "skip"}'
 ```
 
-Nothing is ever sent without one of these actions. Each approved or edited draft gets a signed
+Nothing is ever sent without one of these actions. When you approve or edit a draft that passed
+moderation and whose channel is connected (Instagram/Gmail), SELPH queues delivery immediately and
+retries transient failures; a draft cannot be decided twice, so a reply is never delivered twice.
+Simulated/manual messages have no connected account, so nothing leaves the system. Drafts flagged by
+moderation are never auto-delivered: send them deliberately with `POST /v1/channels/send-reply`.
+Set `AUTO_SEND_ON_APPROVE=false` to turn automatic delivery off entirely. Each approved or edited draft gets a signed
 verification certificate (`GET /v1/twin/certificate`, `GET /verify/{twin_id}/{message_hash}`).
 
 ---
@@ -212,7 +217,31 @@ curl -s $BASE/twin/weekly-digest -H "$AUTH"
 
 ---
 
-## 5. Voice and avatar (consent-gated)
+## 5. Your data: sessions, export, deletion
+
+```bash
+# Log out (revokes this token immediately; pass the refresh token to revoke it too)
+curl -s -X POST $BASE/auth/logout -H "$AUTH" -H "Content-Type: application/json" -d '{"refresh_token": "..."}'
+
+# Exchange a refresh token for a new pair (works after the access token expired; single-use)
+curl -s -X POST $BASE/auth/refresh -H "Content-Type: application/json" -d '{"refresh_token": "..."}'
+
+# Download everything SELPH stores about you (secrets excluded)
+curl -s $BASE/privacy/export -H "$AUTH" > my-selph-data.json
+
+# Permanently delete your account and all data. Irreversible; needs your password.
+curl -s -X DELETE $BASE/privacy/account -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"password": "...", "confirm": "DELETE MY ACCOUNT"}'
+```
+
+Deletion returns a signed **deletion certificate**. Keep it: it is the only record that the erasure
+happened, and anyone can check it at `GET /v1/privacy/deletion-certificates/{certificate_id}`.
+Audit logs are retained anonymized. Voice/avatar models held by third-party providers must be deleted with
+the provider.
+
+---
+
+## 6. Voice and avatar (consent-gated)
 
 ```bash
 curl -s -X POST $BASE/identity/voice/consent -H "$AUTH" -H "Content-Type: application/json" -d '{"granted": true}'
@@ -242,7 +271,9 @@ If the model fails or returns invalid JSON, the twin falls back to the built-in 
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /v1/auth/signup` · `login` · `refresh` · `logout` · `GET /me` · `POST /push-token` |
+| Auth | `POST /v1/auth/signup` · `login` · `refresh` (optional `refresh_token` body) · `logout` · `GET /me` · `POST /push-token` |
+| Privacy | `GET /v1/privacy/export` · `DELETE /v1/privacy/account` · `GET /v1/privacy/deletion-certificates/{id}` · `GET/PATCH /settings` |
+| Ops | `GET /health` · `GET /ready` · `GET /metrics` (token-protected) |
 | Twin | `GET/PUT /v1/twin/me` · `POST /pause` · `/resume` · `GET /stats` · `/weekly-digest` · `/quality-summary` · `/performance-summary` |
 | Identity | `POST /v1/identity/onboard` · `GET/PATCH /profile` · `topics/known` · `topics/avoided` · `briefings` · `sender-tiers` · `profiles` · `channel-mappings` |
 | Messages | `POST /v1/messages/ingest` · `GET /v1/messages/` · `GET /v1/messages/{id}` |

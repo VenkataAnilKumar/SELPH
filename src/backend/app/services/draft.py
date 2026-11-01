@@ -122,6 +122,52 @@ class DraftService:
         return draft
     
     @staticmethod
+    def _claim_pending(db: Session, draft: Draft, new_status: str) -> None:
+        """
+        Atomically move a draft out of pending_approval.
+
+        A conditional UPDATE means two simultaneous decisions (a double-click, a retry, two
+        devices) cannot both win, so a reply can never be approved and delivered twice.
+        """
+        claimed = (
+            db.query(Draft)
+            .filter(Draft.id == draft.id, Draft.status == "pending_approval")
+            .update({"status": new_status}, synchronize_session=False)
+        )
+        if not claimed:
+            db.rollback()
+            current = db.query(Draft.status).filter(Draft.id == draft.id).scalar()
+            raise ValueError(f"Draft already {current}; it can no longer be changed")
+
+    @staticmethod
+    def _queue_delivery(db: Session, draft: Draft) -> bool:
+        """
+        Queue delivery of a user-approved draft through its originating channel.
+
+        Only when: auto-send is enabled, moderation passed (flagged drafts need an explicit
+        /channels/send-reply), and the user has a connected account for the channel (simulated
+        and manual messages have none, so nothing leaves the system).
+        """
+        from app.config import get_settings
+        from app.services.channel import ChannelService
+
+        if not get_settings().auto_send_on_approve or not draft.moderation_passed:
+            return False
+        message = db.query(Message).filter(Message.id == draft.message_id).first()
+        if not message or not ChannelService.get_credential(db, draft.user_id, message.channel):
+            return False
+        try:
+            from app.tasks.send_reply import send_channel_reply
+
+            send_channel_reply.delay(draft.id)
+            return True
+        except Exception as exc:  # broker down: draft stays approved; user can retry via /send-reply
+            import logging
+
+            logging.getLogger(__name__).warning("Could not queue delivery for draft %s: %s", draft.id, exc)
+            return False
+
+    @staticmethod
     def approve_draft(db: Session, draft_id: str, user_id: str) -> Draft:
         """Approve a draft (user action: approve)"""
         draft = DraftService.get_draft(db, draft_id)
@@ -131,7 +177,8 @@ class DraftService:
         
         if draft.user_id != user_id:
             raise ValueError("Unauthorized: Draft belongs to different user")
-        
+
+        DraftService._claim_pending(db, draft, "approved")
         draft.status = "approved"
         draft.user_action = "approve"
 
@@ -154,6 +201,7 @@ class DraftService:
         db.refresh(draft)
         from app.metrics import record_decision
         record_decision("approve")
+        DraftService._queue_delivery(db, draft)
 
         # Phase 3.4: reinforce twin profile from approved draft
         TwinLearningService.learn_from_approval(db, draft.twin_id, draft.content)
@@ -205,6 +253,7 @@ class DraftService:
         if draft.user_id != user_id:
             raise ValueError("Unauthorized: Draft belongs to different user")
         
+        DraftService._claim_pending(db, draft, "edited")
         original_content = draft.content
         draft.edited_content = edited_content
         draft.status = "edited"
@@ -229,6 +278,7 @@ class DraftService:
         db.refresh(draft)
         from app.metrics import record_decision
         record_decision("edit")
+        DraftService._queue_delivery(db, draft)
 
         # Phase 3.4: adapt twin profile from user's edit
         TwinLearningService.learn_from_edit(db, draft.twin_id, original_content, edited_content)

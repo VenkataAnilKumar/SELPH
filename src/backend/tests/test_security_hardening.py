@@ -215,3 +215,27 @@ def test_service_sends_approved_draft(test_db, test_user):
     with patch("app.services.channel.get_adapter", return_value=adapter):
         assert ChannelService.send_draft_reply(test_db, draft.id) is True
     adapter.send_reply.assert_called_once()
+
+
+# ── twin signing secrets are encrypted at rest too ───────────────────────────
+
+def test_twin_signing_secret_is_encrypted_in_the_database(test_db, test_user):
+    from app.services.verification import VerificationService
+
+    cert = VerificationService.issue_certificate(test_db, test_user.id)
+    plain = cert.private_key_ref
+    raw = test_db.execute(text("SELECT private_key_ref FROM twin_certificates")).scalar()
+
+    assert raw.startswith("enc:v1:") and plain not in raw and len(raw) <= 200
+    sig = VerificationService.sign_message(plain, "hash")          # signing still works with the decrypted value
+    assert sig and VerificationService.sign_message(cert.private_key_ref, "hash") == sig
+
+
+def test_legacy_plaintext_twin_secret_still_signs(test_db, test_user):
+    from app.services.verification import VerificationService
+
+    cert = VerificationService.issue_certificate(test_db, test_user.id)
+    secret = cert.private_key_ref
+    test_db.execute(text("UPDATE twin_certificates SET private_key_ref = :s"), {"s": secret})  # as stored before this change
+    test_db.commit(); test_db.expire_all()
+    assert VerificationService.issue_certificate(test_db, test_user.id).private_key_ref == secret

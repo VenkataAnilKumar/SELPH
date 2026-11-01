@@ -46,6 +46,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck web, landing
+        run: |
+          npx tsc --noEmit -p src/web
+          npx tsc --noEmit -p src/landing
+
       - name: Run web tests
         run: npm test --workspace=src/web -- --runInBand --ci
 
@@ -72,6 +77,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Typecheck mobile
+        run: npx tsc --noEmit -p src/mobile
 
       - name: Run mobile tests
         run: npm test --workspace=src/mobile -- --runInBand --ci

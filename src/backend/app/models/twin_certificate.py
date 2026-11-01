@@ -2,6 +2,7 @@
 
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from app.models.base import BaseModel
+from app.models.channel_credential import EncryptedString
 
 
 class TwinCertificate(BaseModel):
@@ -10,7 +11,8 @@ class TwinCertificate(BaseModel):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     twin_public_id = Column(String(50), nullable=False, unique=True, index=True)
     public_key = Column(Text, nullable=False)
-    private_key_ref = Column(String(200), nullable=False)
+    # HMAC signing secret for this twin: encrypted at rest (ciphertext fits the existing varchar(200)).
+    private_key_ref = Column(EncryptedString(200), nullable=False)
     issued_at = Column(DateTime, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
