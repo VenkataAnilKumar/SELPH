@@ -850,6 +850,14 @@ class TestGmailOAuthEndpoints:
 
 
 class TestGmailWebhookEndpoint:
+    @pytest.fixture(autouse=True)
+    def _configured_webhook_secret(self, unauth_client, monkeypatch):
+        """Webhooks fail closed, so these tests run the way a real deployment does: with a secret."""
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "google_webhook_secret", "test-webhook-secret")
+        unauth_client.headers["X-Webhook-Token"] = "test-webhook-secret"
+
     def _make_pubsub_body(self, email="user@gmail.com", history_id="9999"):
         data = json.dumps({"emailAddress": email, "historyId": history_id})
         encoded = base64.urlsafe_b64encode(data.encode()).decode()

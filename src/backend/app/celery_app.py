@@ -48,6 +48,9 @@ celery_app.conf.update(
     },
 )
 
+# Make this the default app so shared_task `.delay()` calls from any process use this broker.
+celery_app.set_default()
+
 # Auto-discover tasks from tasks module
 celery_app.autodiscover_tasks(["app.tasks"])
 

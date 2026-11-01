@@ -9,6 +9,11 @@ jest.mock('@/lib/auth-context', () => ({
   useMobileAuth: jest.fn(),
 }))
 
+// Panels fetch on mount and have their own tests; stub them so they do not consume the ordered
+// apiClient.get mock responses this suite feeds to the dashboard itself.
+jest.mock('@/components/briefings-panel', () => ({ BriefingsPanel: () => null }))
+jest.mock('@/components/vip-tiers-panel', () => ({ VipTiersPanel: () => null }))
+
 jest.mock('@selph/shared', () => ({
   apiClient: {
     get: jest.fn(),

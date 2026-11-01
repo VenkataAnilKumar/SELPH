@@ -16,6 +16,10 @@ from app.models.base import utcnow
 logger = logging.getLogger(__name__)
 
 
+# Statuses a user decision (or a retry of one) has produced; anything else must never be sent.
+SENDABLE_DRAFT_STATUSES = frozenset({"approved", "edited", "send_failed"})
+
+
 class ChannelService:
     """
     High-level channel operations.
@@ -164,6 +168,16 @@ class ChannelService:
         draft = db.query(Draft).filter(Draft.id == draft_id).first()
         if not draft:
             logger.error("send_draft_reply: draft %s not found", draft_id)
+            return False
+
+        # Defense in depth: no caller (HTTP, Celery, future code) may deliver a draft the
+        # user has not approved. Pending, rejected, skipped and already-sent drafts never go out.
+        if draft.status not in SENDABLE_DRAFT_STATUSES:
+            logger.error(
+                "send_draft_reply: refusing draft %s with status %r (not user-approved)",
+                draft_id,
+                draft.status,
+            )
             return False
 
         message = db.query(Message).filter(Message.id == draft.message_id).first()

@@ -13,6 +13,7 @@ from app.services import DraftService, TwinEngineService
 from app.services.identity import IdentityService
 from app.services.crisis import CrisisService
 from app.services.privacy import PrivacyService
+from app import metrics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ def run_draft_generation(db, message_id: str, user_id: str) -> dict:
     # Phase 10 crisis mode guardrails.
     operating_mode = CrisisService.get_twin_mode(db, user_id)
     if operating_mode == "manual_pause":
+        metrics.record_routing("skipped_manual_pause")
         return {
             "status": "success",
             "routing_action": "skipped_manual_pause",
@@ -53,6 +55,7 @@ def run_draft_generation(db, message_id: str, user_id: str) -> dict:
         }
 
     if operating_mode == "crisis_mode":
+        metrics.record_routing("use_crisis_template")
         return {
             "status": "success",
             "routing_action": "use_crisis_template",
@@ -75,6 +78,7 @@ def run_draft_generation(db, message_id: str, user_id: str) -> dict:
             message.sender_id,
             message.channel,
         )
+        metrics.record_routing("direct_notify")
         return {
             "status": "success",
             "routing_action": "direct_notify",
@@ -119,6 +123,14 @@ def run_draft_generation(db, message_id: str, user_id: str) -> dict:
     # Mark message as draft_ready
     message.status = "draft_ready"
     db.commit()
+
+    metrics.record_routing("notify_user_force_review" if sender_tier == 1 else "notify_user")
+    metrics.record_draft(
+        pipeline.get("generation_source"),
+        pipeline["moderation_passed"],
+        pipeline["moderation_flags"],
+        pipeline.get("metrics", {}).get("pipeline_latency_ms"),
+    )
 
     # Fire push notification (non-blocking; failure is logged, not raised)
     from app.tasks.push_notifications import notify_draft_ready

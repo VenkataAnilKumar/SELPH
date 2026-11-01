@@ -85,10 +85,17 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     enable_metrics: bool = True
+    # If set, /metrics requires `Authorization: Bearer <token>`. In production /metrics is hidden without one.
+    metrics_token: str = ""
 
     # Security hardening
     auth_rate_limit_per_minute: int = 20
     enforce_production_jwt_secret: bool = True
+    # Comma-separated Fernet keys; first encrypts, all decrypt (rotation). Required in production.
+    credential_encryption_key: str = ""
+    # Webhooks fail closed when their signing secret is unset. This opt-in (never honored in
+    # production) lets local development accept unsigned webhook calls.
+    allow_unsigned_webhooks: bool = False
     
     # Feature Flags
     feature_twin_briefing: bool = False

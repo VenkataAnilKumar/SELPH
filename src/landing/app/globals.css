@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-white text-selph-body antialiased; }
+  :focus-visible { outline: 2px solid #7C3AED; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+}
+
+@layer utilities {
+  .gradient-text {
+    background-image: linear-gradient(90deg, #7C3AED, #0EA5E9);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

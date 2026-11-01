@@ -28,6 +28,7 @@ from app.models.twin_certificate import TwinCertificate
 from app.models.verification_log import VerificationLog
 from app.models.user_privacy_settings import UserPrivacySettings
 from app.models.t2t_session import T2TSession
+from app.models.revoked_token import RevokedToken
 
 __all__ = [
     "Base",
@@ -57,4 +58,5 @@ __all__ = [
     "VerificationLog",
     "UserPrivacySettings",
     "T2TSession",
+    "RevokedToken",
 ]

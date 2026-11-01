@@ -100,6 +100,9 @@ class MessageService:
         db.add(message)
         db.commit()
         db.refresh(message)
+
+        from app.metrics import record_message
+        record_message(channel)
         return message
     
     @staticmethod

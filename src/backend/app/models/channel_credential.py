@@ -4,8 +4,22 @@ ChannelCredential model — OAuth tokens and API credentials
 
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.types import TypeDecorator
+from app.crypto import decrypt_secret, encrypt_secret
 from app.models.base import BaseModel
+
+
+class EncryptedString(TypeDecorator):
+    """String column encrypted at rest (Fernet). Legacy plaintext values are read transparently."""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_secret(value) if value is not None else None
+
+    def process_result_value(self, value, dialect):
+        return decrypt_secret(value) if value is not None else None
 
 
 class ChannelCredential(BaseModel):
@@ -16,9 +30,8 @@ class ChannelCredential(BaseModel):
     channel = Column(String, nullable=False)  # instagram, gmail, twitter, whatsapp, slack
     credential_type = Column(String, default="oauth_token", nullable=False)  # oauth_token, api_key, etc.
     
-    # Credential value (should be encrypted in production)
-    # In production, use encrypted column or store in vault
-    credential_value = Column(String, nullable=False)
+    # OAuth token / JSON token blob, encrypted at rest (see app/crypto.py)
+    credential_value = Column(EncryptedString, nullable=False)
     
     # Metadata
     scope = Column(String, nullable=True)  # Permissions: e.g., "messages.read messages.write"

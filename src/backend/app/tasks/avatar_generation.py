@@ -87,10 +87,36 @@ def generate_avatar(
 
 @shared_task
 def batch_generate_avatars(draft_ids: list, user_id: str):
-    """Generate avatars for multiple drafts in batch."""
-    logger.info("[PHASE 7 FOUNDATION] Batch avatar generation queued for %d drafts", len(draft_ids))
+    """
+    Fan out avatar generation: queue one generate_avatar job per draft the user owns.
 
+    Drafts that do not exist or belong to someone else are skipped, never queued.
+    """
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    db = sessionmaker(bind=engine)()
+    queued: list[str] = []
+    skipped: list[str] = []
+    try:
+        for draft_id in dict.fromkeys(draft_ids):
+            draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == user_id).first()
+            if not draft:
+                skipped.append(draft_id)
+                continue
+            generate_avatar.delay(
+                draft_id=draft.id,
+                user_id=user_id,
+                text=draft.edited_content or draft.content,
+                voice_audio_url=draft.voice_audio_url,
+            )
+            queued.append(draft.id)
+    finally:
+        db.close()
+
+    logger.info("Batch avatar generation: queued=%d skipped=%d", len(queued), len(skipped))
     return {
-        "status": "phase_7_foundation",
-        "drafts_queued": len(draft_ids),
+        "status": "queued",
+        "drafts_queued": len(queued),
+        "queued": queued,
+        "skipped": skipped,
     }

@@ -5,6 +5,7 @@ FastAPI application entry point
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.metrics import MetricsMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
 
@@ -80,6 +81,9 @@ def create_app() -> FastAPI:
         allowed_hosts=settings.allowed_hosts,
     )
     
+    # Middleware: request metrics. Added last = outermost, so it times the full stack.
+    app.add_middleware(MetricsMiddleware)
+
     # Include routers
     app.include_router(
         health.router,

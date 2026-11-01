@@ -8,6 +8,15 @@ jest.mock('@/lib/auth-context', () => ({
   useAuth: jest.fn(),
 }))
 
+// The panels fetch on mount and have their own tests; stub them so they do not consume the
+// ordered apiClient.get mock responses this suite feeds to the dashboard itself.
+jest.mock('@/components/briefings-panel', () => ({
+  BriefingsPanel: () => <div data-testid="briefings-panel-stub" />,
+}))
+jest.mock('@/components/vip-tiers-panel', () => ({
+  VipTiersPanel: () => <div data-testid="vip-tiers-panel-stub" />,
+}))
+
 jest.mock('@/components/protected-route', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
@@ -119,6 +128,9 @@ describe('Dashboard page (web)', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Twin Profile')).toBeInTheDocument()
+      expect(screen.getByTestId('briefings-panel-stub')).toBeInTheDocument()
+      expect(screen.getByTestId('vip-tiers-panel-stub')).toBeInTheDocument()
+      expect(screen.getByText('Simulate Incoming Message')).toBeInTheDocument()
     })
 
     expect(screen.getByText('Career Coaching')).toBeInTheDocument()

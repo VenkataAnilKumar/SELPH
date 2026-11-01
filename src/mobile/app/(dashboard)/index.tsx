@@ -16,6 +16,9 @@ import {
 } from 'react-native'
 import { useMobileAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
+import { SimulateMessage } from '@/components/simulate-message'
+import { BriefingsPanel } from '@/components/briefings-panel'
+import { VipTiersPanel } from '@/components/vip-tiers-panel'
 
 interface Twin {
   id: string
@@ -633,6 +636,10 @@ export default function DashboardScreen() {
         <Text style={styles.metaText}>Certificate: {certificateId || 'Not loaded'}</Text>
         <Text style={styles.metaText}>Proactive suggestions: {proactiveSuggestions.length}</Text>
       </View>
+
+      <SimulateMessage onIngested={refreshDashboard} />
+      <BriefingsPanel />
+      <VipTiersPanel />
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pending Drafts</Text>

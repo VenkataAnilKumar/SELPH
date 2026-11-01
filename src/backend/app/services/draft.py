@@ -152,6 +152,8 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+        from app.metrics import record_decision
+        record_decision("approve")
 
         # Phase 3.4: reinforce twin profile from approved draft
         TwinLearningService.learn_from_approval(db, draft.twin_id, draft.content)
@@ -183,6 +185,8 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+        from app.metrics import record_decision
+        record_decision("reject")
         return draft
     
     @staticmethod
@@ -223,6 +227,8 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+        from app.metrics import record_decision
+        record_decision("edit")
 
         # Phase 3.4: adapt twin profile from user's edit
         TwinLearningService.learn_from_edit(db, draft.twin_id, original_content, edited_content)
@@ -254,6 +260,8 @@ class DraftService:
         db.add(audit)
         db.commit()
         db.refresh(draft)
+        from app.metrics import record_decision
+        record_decision("skip")
         return draft
     
     @staticmethod

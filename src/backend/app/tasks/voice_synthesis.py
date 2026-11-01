@@ -97,18 +97,37 @@ def synthesize_voice(
 @shared_task
 def batch_synthesize_voices(draft_ids: list, user_id: str):
     """
-    Synthesize voices for multiple drafts in batch
-    
-    Args:
-        draft_ids: List of draft IDs
-        user_id: Owner of the twin
-    
+    Fan out voice synthesis: queue one synthesize_voice job per draft the user owns.
+
+    Drafts that do not exist or belong to someone else are skipped, never queued.
+
     Returns:
-        dict with processing status
+        dict with `queued` and `skipped` draft id lists
     """
-    logger.info(f"[PHASE 6 STUB] Batch voice synthesis queued for {len(draft_ids)} drafts")
-    
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    db = sessionmaker(bind=engine)()
+    queued: list[str] = []
+    skipped: list[str] = []
+    try:
+        for draft_id in dict.fromkeys(draft_ids):  # de-duplicate, keep order
+            draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == user_id).first()
+            if not draft:
+                skipped.append(draft_id)
+                continue
+            synthesize_voice.delay(
+                draft_id=draft.id,
+                user_id=user_id,
+                text=draft.edited_content or draft.content,
+            )
+            queued.append(draft.id)
+    finally:
+        db.close()
+
+    logger.info("Batch voice synthesis: queued=%d skipped=%d", len(queued), len(skipped))
     return {
-        "status": "phase_6_placeholder",
-        "drafts_queued": len(draft_ids),
+        "status": "queued",
+        "drafts_queued": len(queued),
+        "queued": queued,
+        "skipped": skipped,
     }

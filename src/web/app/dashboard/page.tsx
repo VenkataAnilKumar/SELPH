@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { SimulateMessage } from "@/components/simulate-message";
+import { BriefingsPanel } from "@/components/briefings-panel";
+import { VipTiersPanel } from "@/components/vip-tiers-panel";
 import { useAuth } from "@/lib/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { apiClient } from "@selph/shared";
@@ -617,6 +619,11 @@ export default function DashboardPage() {
           )}
 
           <SimulateMessage onIngested={refreshDashboard} />
+
+          <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <BriefingsPanel />
+            <VipTiersPanel />
+          </div>
 
           <section className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
             <div className="rounded-lg bg-white p-8 shadow">

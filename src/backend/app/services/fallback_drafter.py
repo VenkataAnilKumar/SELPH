@@ -88,8 +88,11 @@ def _body(intent: str, topic: str | None, tone: str, long_form: bool) -> list[st
     sentences: list[str]
 
     if intent == "gratitude":
+        about_topic = f", especially about {topic}" if topic else ""
         sentences = [
-            "Thank you, that really means a lot." if formal else "Thank you, that really means a lot to me!",
+            f"Thank you{about_topic}, that really means a lot."
+            if formal
+            else f"Thank you{about_topic}, that really means a lot to me!",
         ]
         if long_form:
             sentences.append(

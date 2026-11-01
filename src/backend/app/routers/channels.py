@@ -168,6 +168,19 @@ async def instagram_oauth_callback(
 # INSTAGRAM — Webhook (Meta Graph API)
 # ============================================================================
 
+def _reject_unsigned_webhook(channel: str, setting_name: str) -> None:
+    """Fail closed when a webhook has no signing secret configured."""
+    settings = get_settings()
+    if settings.allow_unsigned_webhooks and settings.environment.lower() != "production":
+        logger.warning("%s webhook accepted WITHOUT verification (ALLOW_UNSIGNED_WEBHOOKS)", channel)
+        return
+    logger.error("%s webhook rejected: %s is not configured", channel, setting_name)
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"{channel} webhook is not configured ({setting_name} missing)",
+    )
+
+
 @router.get("/instagram/webhook")
 async def instagram_webhook_verify(
     hub_mode: str = Query(None, alias="hub.mode"),
@@ -219,6 +232,8 @@ async def instagram_webhook_receive(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Webhook signature verification failed",
             )
+    else:
+        _reject_unsigned_webhook("Instagram", "META_APP_SECRET")
 
     try:
         payload = await request.json()
@@ -361,12 +376,18 @@ async def gmail_webhook_receive(
     """
     settings = get_settings()
     if settings.google_webhook_secret:
-        received_secret = request.headers.get("X-Webhook-Token", "")
-        if not hmac.compare_digest(received_secret, settings.google_webhook_secret):
+        # Pub/Sub push cannot add custom headers, so the secret may also arrive as ?token=...
+        received_secret = request.headers.get("X-Webhook-Token") or request.query_params.get("token", "")
+        if not hmac.compare_digest(
+            received_secret.encode("utf-8", "ignore"),
+            settings.google_webhook_secret.encode("utf-8"),
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid Gmail webhook token",
             )
+    else:
+        _reject_unsigned_webhook("Gmail", "GOOGLE_WEBHOOK_SECRET")
 
     try:
         payload = await request.json()
