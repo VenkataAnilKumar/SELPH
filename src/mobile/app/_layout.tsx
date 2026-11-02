@@ -2,7 +2,7 @@
  * Mobile app root layout with authentication provider
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { MobileAuthProvider, useMobileAuth } from '@/lib/auth-context'
 import { usePushNotifications } from '@/lib/use-push-notifications'

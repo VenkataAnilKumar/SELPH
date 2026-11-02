@@ -2,8 +2,9 @@
 Health check endpoints
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+import hmac
 from datetime import datetime, UTC
 from typing import Any
 from sqlalchemy import text
@@ -53,6 +54,24 @@ async def readiness_check(db: Session = Depends(get_db)):
         if settings.jwt_secret_key == "dev-secret-key-change-in-production" or len(settings.jwt_secret_key) < 32:
             jwt_secret_ok = False
             jwt_reason = "Insecure JWT secret for production"
+
+    cred_ok, cred_reason = True, None
+    if settings.environment.lower() == "production" and not _has_value(settings.credential_encryption_key):
+        cred_ok, cred_reason = False, "CREDENTIAL_ENCRYPTION_KEY is required in production"
+    checks["credential_encryption"] = {"ok": cred_ok}
+    if cred_reason:
+        checks["credential_encryption"]["reason"] = cred_reason
+
+    webhook_problems = []
+    if settings.feature_instagram and not _has_value(settings.meta_app_secret):
+        webhook_problems.append("META_APP_SECRET missing: Instagram webhooks are rejected")
+    if settings.feature_gmail and not _has_value(settings.google_webhook_secret):
+        webhook_problems.append("GOOGLE_WEBHOOK_SECRET missing: Gmail webhooks are rejected")
+    if settings.allow_unsigned_webhooks and settings.environment.lower() == "production":
+        webhook_problems.append("ALLOW_UNSIGNED_WEBHOOKS is ignored in production")
+    checks["webhook_security"] = {"ok": not webhook_problems}
+    if webhook_problems:
+        checks["webhook_security"]["reason"] = "; ".join(webhook_problems)
 
     checks["jwt_secret"] = {"ok": jwt_secret_ok}
     if jwt_reason:
@@ -121,3 +140,25 @@ async def readiness_check(db: Session = Depends(get_db)):
         status_code=200 if is_ready else 503,
         content=payload,
     )
+
+
+@router.get("/metrics", include_in_schema=False)
+async def metrics(request: Request, db: Session = Depends(get_db)):
+    """Prometheus scrape endpoint. Optionally protected by METRICS_TOKEN (Bearer)."""
+    from fastapi import HTTPException
+    from fastapi.responses import PlainTextResponse
+    from app import metrics as app_metrics
+
+    settings = get_settings()
+    if not settings.enable_metrics:
+        raise HTTPException(status_code=404, detail="Not found")
+    if settings.metrics_token:
+        supplied = request.headers.get("Authorization", "")
+        expected = f"Bearer {settings.metrics_token}"
+        if not hmac.compare_digest(supplied.encode("utf-8", "ignore"), expected.encode("utf-8")):
+            raise HTTPException(status_code=401, detail="Metrics token required")
+    elif settings.environment.lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")  # never expose unauthenticated in production
+
+    body = app_metrics.render_metrics(db=db, broker_url=settings.celery_broker_url)
+    return PlainTextResponse(body, media_type="text/plain; version=0.0.4")

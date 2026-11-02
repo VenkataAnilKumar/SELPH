@@ -68,7 +68,7 @@ services:
       - redis
     volumes:
       - .:/app
-    command: celery -A app.workers.celery_app worker -l info -Q drafts
+    command: celery -A app.celery_app worker -l info -Q celery,draft_generation,message_processing,voice_synthesis,avatar_generation,channels
 
   # Celery Flower (Monitor)
   flower:
@@ -81,7 +81,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
     depends_on:
       - redis
-    command: celery -A app.workers.celery_app flower --port=5555
+    command: celery -A app.celery_app flower --port=5555
 
 volumes:
   postgres_data:

@@ -3,7 +3,7 @@ Pydantic schemas for Twin endpoints
 """
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 
@@ -134,6 +134,7 @@ class DraftResponse(BaseModel):
     confidence_score: float
     confidence_label: str
     moderation_passed: bool
+    moderation_flags: Optional[List[dict]] = None  # [{pattern, risk, category}] when flagged
     status: str
     generation_source: Optional[str]
     llm_model: Optional[str]

@@ -44,6 +44,9 @@ export const SimulateMessage = ({ onIngested }: SimulateMessageProps) => {
         content: content.trim(),
       });
       const data = response.data;
+      // Refresh the dashboard first so the message never points at a list that does not show the draft yet.
+      setContent("");
+      await onIngested();
       if (data.draft_id) {
         setResult("Draft created — review it under Pending Drafts.");
       } else if (data.routing_action === "direct_notify") {
@@ -53,8 +56,6 @@ export const SimulateMessage = ({ onIngested }: SimulateMessageProps) => {
       } else {
         setResult(`Message received (${data.routing_action || data.status}).`);
       }
-      setContent("");
-      await onIngested();
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to send test message");
     } finally {

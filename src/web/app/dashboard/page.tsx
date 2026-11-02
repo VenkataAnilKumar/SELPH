@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { SimulateMessage } from "@/components/simulate-message";
+import { BriefingsPanel } from "@/components/briefings-panel";
+import { VipTiersPanel } from "@/components/vip-tiers-panel";
+import { moderationReasons, ModerationFlag } from "@/lib/moderation-labels";
 import { useAuth } from "@/lib/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { apiClient } from "@selph/shared";
@@ -35,6 +38,8 @@ interface Draft {
   confidence_score: number;
   confidence_label: string;
   confidence_reasoning?: string | null;
+  moderation_passed?: boolean;
+  moderation_flags?: ModerationFlag[] | null;
   generation_source?: string | null;
   llm_model?: string | null;
   fallback_reason?: string | null;
@@ -66,6 +71,9 @@ interface ProactiveSuggestionSummary {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  // Data is only fetched for a signed-in user. The effects below live outside <ProtectedRoute>, so
+  // without this a logged-out visitor fired five unauthenticated requests before being redirected.
+  const signedIn = !!user;
   const [twin, setTwin] = useState<Twin | null>(null);
   const [stats, setStats] = useState<TwinStats | null>(null);
   const [pendingDrafts, setPendingDrafts] = useState<Draft[]>([]);
@@ -119,8 +127,10 @@ export default function DashboardPage() {
       }
     };
 
-    fetchDashboard();
-  }, []);
+    if (signedIn) {
+      fetchDashboard();
+    }
+  }, [signedIn]);
 
   const refreshDashboard = async () => {
     try {
@@ -140,6 +150,7 @@ export default function DashboardPage() {
 
   // Auto-refresh: 30-second interval + visibility-change revalidation
   useEffect(() => {
+    if (!signedIn) return;
     const intervalId = setInterval(() => {
       refreshDashboard();
     }, 30_000);
@@ -156,7 +167,7 @@ export default function DashboardPage() {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDraftAction = async (
     draftId: string,
@@ -362,18 +373,18 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-gray-100">
         {/* Header */}
         <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">SELPH</h1>
               <p className="text-gray-600">Your Digital Twin Dashboard</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:space-x-4">
+              <div className="min-w-0 lg:text-right">
                 <p className="text-sm text-gray-600">Logged in as</p>
-                <p className="font-medium text-gray-900">{user?.email}</p>
+                <p className="break-all font-medium text-gray-900">{user?.email}</p>
               </div>
 
-              <div className="bg-white rounded-lg shadow p-8 md:col-span-2">
+              <div className="bg-white rounded-lg shadow p-4 sm:p-8 md:col-span-2 min-w-0">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Phase 10 Controls</h2>
                 <p className="text-sm text-gray-600 mb-6">
                   Quick actions for proactive twin, crisis mode, privacy mode, and verification.
@@ -618,6 +629,11 @@ export default function DashboardPage() {
 
           <SimulateMessage onIngested={refreshDashboard} />
 
+          <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <BriefingsPanel />
+            <VipTiersPanel />
+          </div>
+
           <section className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
             <div className="rounded-lg bg-white p-8 shadow">
               <h2 className="text-2xl font-bold text-gray-900">Channel Connections</h2>
@@ -733,6 +749,21 @@ export default function DashboardPage() {
                             {draft.llm_model || "No model recorded"}
                           </span>
                         </div>
+
+                        {draft.moderation_passed === false && (
+                          <div
+                            role="alert"
+                            data-testid="draft-flagged"
+                            className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                          >
+                            <p className="font-semibold">Needs your attention. This draft will not be sent automatically.</p>
+                            <ul className="mt-1 list-disc pl-5">
+                              {moderationReasons(draft.moderation_flags).map((reason) => (
+                                <li key={reason}>{reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
 
                         <p className="mt-4 whitespace-pre-wrap text-gray-900">
                           {draft.content}

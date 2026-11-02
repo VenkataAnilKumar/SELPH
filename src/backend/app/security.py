@@ -5,6 +5,8 @@ Security utilities for password hashing and JWT tokens
 from datetime import datetime, timedelta, UTC
 from typing import Optional
 import logging
+import hashlib
+import uuid
 import jwt
 from passlib.context import CryptContext
 from app.config import get_settings
@@ -68,7 +70,8 @@ def create_access_token(
     else:
         expire = _utcnow() + timedelta(hours=24)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "jti": str(uuid.uuid4())})
+    to_encode.setdefault("type", "access")
     
     encoded_jwt = jwt.encode(
         to_encode,
@@ -92,7 +95,7 @@ def create_refresh_token(
     else:
         expire = _utcnow() + timedelta(days=7)
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "jti": str(uuid.uuid4()), "type": "refresh"})
 
     encoded_jwt = jwt.encode(
         to_encode,
@@ -119,3 +122,29 @@ def verify_token(token: str) -> Optional[dict]:
         return None
     except jwt.InvalidTokenError:
         return None
+
+
+def token_revocation_key(token: str, payload: Optional[dict] = None) -> str:
+    """Stable identifier for revoking a token: its jti, or a hash for legacy tokens."""
+    jti = (payload or {}).get("jti")
+    if jti:
+        return str(jti)
+    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def verify_access_token(token: str) -> Optional[dict]:
+    """
+    Verify a token that may be used as a bearer credential.
+
+    Refresh tokens and purpose-scoped tokens (e.g. OAuth state, which travels through
+    third-party redirects) are rejected so they can never act as an API session.
+    Legacy tokens without a `type` claim are still accepted as access tokens.
+    """
+    payload = verify_token(token)
+    if not payload:
+        return None
+    if payload.get("type", "access") != "access":
+        return None
+    if payload.get("purpose"):
+        return None
+    return payload

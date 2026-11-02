@@ -230,12 +230,25 @@ class IdentityService:
         db.commit()
         return True
 
+    # Decisions needed before learned evidence fully outweighs profile completeness.
+    CONFIDENCE_FULL_EVIDENCE_DECISIONS = 20
+    CONFIDENCE_MAX_EVIDENCE_WEIGHT = 0.6
+
     @staticmethod
     def get_confidence_score(db: Session, user_id: str) -> dict:
         """
-        Stub: compute a confidence score based on profile completeness.
-        Phase 2 will replace this with an embedding-based similarity score.
+        How well the twin knows the user, from two signals:
+
+        1. Profile completeness: voice, style, known topics, avoided topics (always available).
+        2. Learned evidence: how the user actually treats drafts. An approved-as-is draft
+           counts 1.0, an edited one 0.5, rejected/skipped 0. Evidence gains weight as
+           decisions accumulate (up to 60% of the score at 20 decisions), so a twin that
+           keeps getting edited or rejected cannot report "high" confidence.
+
+        With no decisions yet, the score equals profile completeness.
         """
+        from app.models import Draft
+
         profile = IdentityService.get_identity_profile(db, user_id)
         topics_known = IdentityService.get_topics_known(db, user_id)
         topics_avoided = IdentityService.get_topics_avoided(db, user_id)
@@ -247,8 +260,27 @@ class IdentityService:
             bool(topics_known),
             bool(topics_avoided),
         ])
+        profile_score = filled / TOTAL_FIELDS
 
-        score = round(filled / TOTAL_FIELDS, 2)
+        actions = [
+            row[0] for row in db.query(Draft.user_action)
+            .filter(Draft.user_id == user_id, Draft.user_action.isnot(None))
+            .all()
+        ]
+        decisions = len(actions)
+        approved = sum(1 for a in actions if a == "approve")
+        edited = sum(1 for a in actions if a == "edit")
+        rejected = decisions - approved - edited
+
+        evidence_score = None
+        if decisions:
+            evidence_score = (approved + 0.5 * edited) / decisions
+            weight = min(decisions / IdentityService.CONFIDENCE_FULL_EVIDENCE_DECISIONS, 1.0) * \
+                IdentityService.CONFIDENCE_MAX_EVIDENCE_WEIGHT
+            score = (1 - weight) * profile_score + weight * evidence_score
+        else:
+            score = profile_score
+        score = round(score, 2)
 
         if score >= 0.75:
             label = "high"
@@ -260,12 +292,21 @@ class IdentityService:
             label = "low"
             message = "Complete your identity profile so your twin can draft accurate responses."
 
+        if decisions >= 5 and evidence_score is not None and evidence_score < 0.5:
+            message = "You are editing or rejecting most drafts. Add topics, a briefing, or edit replies so your twin can learn."
+
         return {
             "score": score,
             "label": label,
             "fields_complete": filled,
             "total_fields": TOTAL_FIELDS,
             "message": message,
+            "profile_score": round(profile_score, 2),
+            "decisions": decisions,
+            "approved": approved,
+            "edited": edited,
+            "rejected": rejected,
+            "approval_quality": round(evidence_score, 2) if evidence_score is not None else None,
         }
 
     @staticmethod

@@ -1,5 +1,6 @@
 """Schemas for privacy processing mode APIs."""
 
+from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel
 
@@ -25,3 +26,19 @@ class PrivacyCapabilityRequest(BaseModel):
 
 class PrivacyCapabilityResponse(BaseModel):
     updated: bool
+
+
+class AccountDeletionRequest(BaseModel):
+    """Explicit, re-authenticated request to erase the account and all data."""
+
+    password: str
+    confirm: str  # must be exactly "DELETE MY ACCOUNT"
+
+
+class DeletionCertificateResponse(BaseModel):
+    certificate_id: str
+    subject_hash: str
+    completed_at: datetime
+    summary: dict
+    signature: str
+    valid: bool = True

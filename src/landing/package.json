@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "npx serve out -l 3001",
     "lint": "next lint",
-    "export": "next build && next export"
+    "test": "jest"
   },
   "dependencies": {
     "@types/react": "^18.2.37",
@@ -21,6 +21,12 @@
     "typescript": "^5.3.3"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0"
+    "@testing-library/jest-dom": "^6.4.5",
+    "@testing-library/react": "^14.1.2",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.10.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.1.2"
   }
 }

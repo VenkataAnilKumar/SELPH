@@ -109,12 +109,18 @@ class UpdateIdentityRequest(BaseModel):
 
 
 class IdentityConfidenceResponse(BaseModel):
-    """Confidence score stub — how well the twin knows the user"""
+    """How well the twin knows the user: profile completeness blended with learned approval evidence"""
     score: float           # 0.0 – 1.0
     label: str             # "low" | "medium" | "high"
     fields_complete: int   # number of profile fields filled
     total_fields: int      # total profile fields scored
     message: str           # human-readable status
+    profile_score: float = 0.0               # completeness-only score
+    decisions: int = 0                       # drafts the user has acted on
+    approved: int = 0
+    edited: int = 0
+    rejected: int = 0                        # rejected + skipped
+    approval_quality: Optional[float] = None  # (approved + 0.5*edited) / decisions
 
 
 class IdentityOnboardingStatusResponse(BaseModel):

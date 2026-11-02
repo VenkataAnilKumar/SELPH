@@ -35,14 +35,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize user from storage
+  // Restore the session from storage. The API client must get its token back too: without
+  // this, a page reload left the user "logged in" in the UI while every API call was unauthenticated.
   useEffect(() => {
     const storedUser = authStorage.getUser();
-    if (storedUser) {
+    const storedToken = authStorage.getAccessToken();
+    if (storedUser && storedToken) {
+      apiClient.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
       setUser(storedUser);
+    } else if (storedUser || storedToken) {
+      authStorage.clearTokens(); // half a session is no session
     }
     setLoading(false);
   }, []);
+
+  // If the API rejects our token (expired, or revoked by a logout elsewhere), end the session
+  // locally and go to login rather than leaving a broken dashboard.
+  useEffect(() => {
+    apiClient.setUnauthorizedHandler?.(() => {
+      authStorage.clearTokens();
+      delete apiClient.defaults.headers.common["Authorization"];
+      setUser(null);
+      router.push("/auth/login");
+    });
+    return () => apiClient.setUnauthorizedHandler?.(undefined);
+  }, [router]);
 
   const signup = async (email: string, password: string, name: string) => {
     try {

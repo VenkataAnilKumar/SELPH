@@ -2,7 +2,7 @@
  * Mobile dashboard screen
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -16,6 +16,10 @@ import {
 } from 'react-native'
 import { useMobileAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
+import { SimulateMessage } from '@/components/simulate-message'
+import { BriefingsPanel } from '@/components/briefings-panel'
+import { VipTiersPanel } from '@/components/vip-tiers-panel'
+import { moderationReasons, ModerationFlag } from '@/lib/moderation-labels'
 
 interface Twin {
   id: string
@@ -44,6 +48,8 @@ interface Draft {
   status: string
   confidence_score: number
   confidence_label: string
+  moderation_passed?: boolean
+  moderation_flags?: ModerationFlag[] | null
   confidence_reasoning?: string | null
   generation_source?: string | null
   llm_model?: string | null
@@ -634,6 +640,10 @@ export default function DashboardScreen() {
         <Text style={styles.metaText}>Proactive suggestions: {proactiveSuggestions.length}</Text>
       </View>
 
+      <SimulateMessage onIngested={refreshDashboard} />
+      <BriefingsPanel />
+      <VipTiersPanel />
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pending Drafts</Text>
         <Text style={styles.sectionSubtitle}>
@@ -660,6 +670,16 @@ export default function DashboardScreen() {
                   </Text>
                 </View>
 
+                {draft.moderation_passed === false && (
+                  <View style={styles.flagBanner} testID="draft-flagged" accessibilityRole="alert">
+                    <Text style={styles.flagTitle}>Needs your attention. This draft will not be sent automatically.</Text>
+                    {moderationReasons(draft.moderation_flags).map((reason) => (
+                      <Text key={reason} style={styles.flagReason}>
+                        • {reason}
+                      </Text>
+                    ))}
+                  </View>
+                )}
                 <Text style={styles.draftContent}>{draft.content}</Text>
                 <Text style={styles.metaText}>
                   Confidence score: {draft.confidence_score.toFixed(2)}
@@ -1002,6 +1022,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
   },
+  flagBanner: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+  },
+  flagTitle: { color: '#991b1b', fontWeight: '600', fontSize: 13 },
+  flagReason: { color: '#991b1b', fontSize: 13, marginTop: 4 },
   draftContent: {
     fontSize: 15,
     lineHeight: 22,

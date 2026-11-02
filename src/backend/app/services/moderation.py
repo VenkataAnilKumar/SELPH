@@ -80,13 +80,35 @@ class ModerationService:
         return flags
 
     @staticmethod
+    def check_sensitive_incoming(content: str) -> list:
+        """
+        Flag inbound messages that need the human, not a reply: self-harm, or requests
+        for medical, legal or financial direction. A templated reply is wrong for these.
+        """
+        flags = []
+        for rx, risk, category in _COMPILED_SAFETY:
+            if category == "self_harm" or category.startswith("hard_block_"):
+                match = rx.search(content or "")
+                if match:
+                    flags.append({
+                        "pattern": match.group(0).lower(),
+                        "risk": risk,
+                        "category": "sensitive_incoming",
+                        "topic": category,
+                    })
+        return flags
+
+    @staticmethod
     def moderate_reply(incoming: str, draft: str) -> tuple[bool, list, float]:
         """Moderate a drafted reply plus the untrusted inbound message that triggered it."""
         passed, flags, risk = ModerationService.check_content_safety(draft)
-        injection = ModerationService.check_prompt_injection(incoming)
-        if injection:
-            flags = flags + injection
-            risk = max([risk] + [f["risk"] for f in injection])
+        extra = (
+            ModerationService.check_prompt_injection(incoming)
+            + ModerationService.check_sensitive_incoming(incoming)
+        )
+        if extra:
+            flags = flags + extra
+            risk = max([risk] + [f["risk"] for f in extra])
             passed = risk < PASS_THRESHOLD
         return passed, flags, risk
 

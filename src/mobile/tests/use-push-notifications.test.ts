@@ -34,7 +34,7 @@ describe('usePushNotifications', () => {
     })
     ;(apiClient.registerPushToken as jest.Mock).mockResolvedValue({ data: { registered: true } })
 
-    const { rerender } = renderHook(
+    renderHook(
       ({ isAuthenticated }: { isAuthenticated: boolean }) =>
         usePushNotifications(isAuthenticated),
       { initialProps: { isAuthenticated: true } }

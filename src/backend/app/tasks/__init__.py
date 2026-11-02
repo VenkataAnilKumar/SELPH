@@ -2,6 +2,11 @@
 Celery tasks
 """
 
+# Importing the configured Celery app makes it the process-wide default, so `.delay()` calls made
+# from the API process publish to the configured broker (Redis) instead of Celery's built-in
+# AMQP default. Must run before any task module is used.
+from app.celery_app import celery_app  # noqa: F401
+
 from app.tasks.draft_generation import (
     generate_draft_for_message,
     process_draft_generation,

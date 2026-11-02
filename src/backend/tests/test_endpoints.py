@@ -1313,6 +1313,9 @@ class TestHealthEndpoint:
     @patch("app.routers.health.get_settings")
     def test_readiness_check_detects_insecure_production_jwt(self, mock_get_settings, client):
         mock_get_settings.return_value = SimpleNamespace(
+            credential_encryption_key="",
+            allow_unsigned_webhooks=False,
+            google_webhook_secret="",
             environment="production",
             enforce_production_jwt_secret=True,
             jwt_secret_key="dev-secret-key-change-in-production",
@@ -1343,6 +1346,9 @@ class TestHealthEndpoint:
     @patch("app.routers.health.get_settings")
     def test_readiness_check_detects_missing_instagram_config(self, mock_get_settings, client):
         mock_get_settings.return_value = SimpleNamespace(
+            credential_encryption_key="",
+            allow_unsigned_webhooks=False,
+            google_webhook_secret="",
             environment="development",
             enforce_production_jwt_secret=True,
             jwt_secret_key="dev-secret-key-change-in-production",
@@ -1372,6 +1378,9 @@ class TestHealthEndpoint:
     @patch("app.routers.health.get_settings")
     def test_readiness_check_feature_dependencies_all_configured(self, mock_get_settings, client):
         mock_get_settings.return_value = SimpleNamespace(
+            credential_encryption_key="Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMTI=",
+            allow_unsigned_webhooks=False,
+            google_webhook_secret="gmail-webhook-secret",
             environment="production",
             enforce_production_jwt_secret=True,
             jwt_secret_key="this-is-a-very-strong-production-secret-key-12345",
@@ -1401,3 +1410,35 @@ class TestHealthEndpoint:
         assert data["checks"]["feature_gmail"]["ok"] is True
         assert data["checks"]["feature_voice_clone"]["ok"] is True
         assert data["checks"]["feature_avatar_clone"]["ok"] is True
+        assert data["checks"]["credential_encryption"]["ok"] is True
+        assert data["checks"]["webhook_security"]["ok"] is True
+
+
+class TestReadinessSecurityChecks:
+    """/ready must surface the security posture, not just connectivity."""
+
+    @patch("app.routers.health.get_settings")
+    def test_readiness_flags_missing_webhook_secrets_and_encryption_key(self, mock_get_settings, client):
+        mock_get_settings.return_value = SimpleNamespace(
+            environment="production",
+            enforce_production_jwt_secret=True,
+            jwt_secret_key="this-is-a-very-strong-production-secret-key-12345",
+            credential_encryption_key="",
+            allow_unsigned_webhooks=True,
+            google_webhook_secret="",
+            feature_instagram=True,
+            meta_app_id="id", meta_app_secret="", meta_verify_token="t", meta_oauth_redirect_uri="https://x/cb",
+            feature_gmail=True,
+            google_oauth_client_id="c", google_oauth_client_secret="s", google_oauth_redirect_uri="https://x/cb",
+            google_pubsub_topic="projects/p/topics/t",
+            feature_voice_clone=False, voice_provider="mock", elevenlabs_api_key="",
+            feature_avatar_clone=False, avatar_provider="mock", heygen_api_key="",
+        )
+        response = client.get("/ready")
+        assert response.status_code == 503
+        checks = response.json()["checks"]
+        assert checks["credential_encryption"]["ok"] is False
+        assert checks["webhook_security"]["ok"] is False
+        reason = checks["webhook_security"]["reason"]
+        assert "META_APP_SECRET" in reason and "GOOGLE_WEBHOOK_SECRET" in reason
+        assert "ALLOW_UNSIGNED_WEBHOOKS is ignored in production" in reason

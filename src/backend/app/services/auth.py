@@ -5,6 +5,7 @@ Authentication service
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.models import User, Twin, IdentityProfile, AuditLog
+from app.config import get_settings
 from app.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.schemas.auth import SignupRequest, LoginRequest
 from datetime import timedelta
@@ -97,16 +98,18 @@ class AuthService:
         Returns:
             (access_token, refresh_token, expires_in_seconds)
         """
-        # Access token: 24 hours
+        settings = get_settings()
+
+        # Access token lifetime: JWT_EXPIRATION_HOURS (default 24)
         access_token, expires_in = create_access_token(
             data={"sub": user_id},
-            expires_delta=timedelta(hours=24),
+            expires_delta=timedelta(hours=settings.jwt_expiration_hours),
         )
         
-        # Refresh token: 7 days
+        # Refresh token lifetime: JWT_REFRESH_EXPIRATION_DAYS (default 7)
         refresh_token = create_refresh_token(
             data={"sub": user_id},
-            expires_delta=timedelta(days=7),
+            expires_delta=timedelta(days=settings.jwt_refresh_expiration_days),
         )
         
         return access_token, refresh_token, expires_in

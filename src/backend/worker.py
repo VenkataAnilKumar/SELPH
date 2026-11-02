@@ -6,7 +6,7 @@ Run with: python -m app.worker or celery -A app.celery_app worker
 
 import os
 import logging
-from app.celery_app import celery_app
+from app.celery_app import WORKER_QUEUES, celery_app
 
 # Configure logging
 logging.basicConfig(
@@ -25,5 +25,5 @@ if __name__ == "__main__":
         "worker",
         "--loglevel=info",
         "--concurrency=4",
-        "--queues=celery,draft_generation,message_processing,voice_synthesis,avatar_generation",
+        "--queues=" + ",".join(WORKER_QUEUES),
     ])

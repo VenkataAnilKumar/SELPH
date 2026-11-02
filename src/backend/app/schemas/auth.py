@@ -2,6 +2,7 @@
 Pydantic schemas for authentication
 """
 
+from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
@@ -35,6 +36,16 @@ class LoginRequest(BaseModel):
             }
         }
     )
+
+
+class RefreshRequest(BaseModel):
+    """Optional body for /auth/refresh: exchange a refresh token for a new token pair"""
+    refresh_token: Optional[str] = None
+
+
+class LogoutRequest(BaseModel):
+    """Optional body for /auth/logout: also revoke the refresh token"""
+    refresh_token: Optional[str] = None
 
 
 class TokenResponse(BaseModel):

@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-11 (fix round)
+
+### Fixed
+- **Deployed workers could not deliver replies or send notifications** (found by running the real Docker stack): no worker consumed the `channels` queue, so approved replies waited in Redis forever, and the worker never loaded `push_notifications`, so draft-ready and VIP notifications were rejected as "unregistered task". The queue list is now defined once (`WORKER_QUEUES`, used by `worker.py`, checked against both compose files by a test) and every task module is registered explicitly. The secondary `src/backend/docker-compose.yml` also pointed at a module that does not exist.
+- **The LangGraph engine was built but not used.** It is now the live draft path (non-pausing: the saved pending draft is the human checkpoint), so every draft writes a structured audit event. Also fixes the audit's `has_briefing` signal, which read a non-existent attribute and was never true, and writes the audit inside a savepoint so a failed audit write cannot break drafting.
+- Briefing type dropdown clipped its label; the hint now shows beneath.
+- **Web: reloading the dashboard broke every API call.** The app restored the user from storage but never re-attached the token (and the shared API client read a different storage key than the web app writes), so any page reload returned 403s. Fixed both; a revoked or expired session now sends you to login instead of leaving a broken page.
+- Web: a logged-out visitor to `/dashboard` fired five unauthenticated API requests before being redirected.
+- Web: the dashboard header overflowed on phones (661px on a 390px screen); it now stacks.
+- Draft responses now include `moderation_flags`, and web and mobile show *why* a draft needs attention ("will not be sent automatically") instead of only a low-confidence label.
+- Simulate panel announced "Draft created" before the Pending Drafts list had refreshed.
+- **A Redis outage froze API requests** (ingest, approve, anything that queues a job): `.delay()` retried an unreachable Celery result backend with no practical limit. Publishing no longer touches the result backend and broker retries are bounded; with Redis down, ingest now returns in ~0.1s and still creates the draft. Also made backend CI hang for 12+ minutes (no Redis service there).
+- `JWT_EXPIRATION_HOURS` / `JWT_REFRESH_EXPIRATION_DAYS` were ignored (24 h / 7 d were hardcoded).
+- bcrypt/passlib logged a traceback on every startup (pinned `bcrypt==4.0.1`).
+- Auth rate limiter was per-process and leaked memory per client; now Redis-backed with bounded in-process fallback, and also covers token refresh.
+- Approving a draft never delivered the reply. It now queues delivery for clean drafts on connected channels (`AUTO_SEND_ON_APPROVE`), retries transient channel failures, and a draft can no longer be decided twice (atomic claim), so a reply cannot be delivered twice.
+- Twin signing secrets were stored in plaintext; now encrypted at rest.
+- Mobile had 9 TypeScript errors; CI now typechecks web, landing and mobile.
+
+### Added
+- Right to erasure: `DELETE /v1/privacy/account` with a signed, publicly verifiable deletion certificate (`GET /v1/privacy/deletion-certificates/{id}`); audit logs retained anonymized.
+- Right to portability: `GET /v1/privacy/export` (secrets excluded).
+
 ## [Unreleased] - 2026-11 (local-first hardening)
 
 ### Added

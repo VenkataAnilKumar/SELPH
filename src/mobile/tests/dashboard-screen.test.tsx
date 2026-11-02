@@ -1,13 +1,20 @@
-import React from 'react'
-import { Alert, AppState } from 'react-native'
+import { Alert, AppState, AppStateStatus } from 'react-native'
+
 import { fireEvent, render, waitFor } from '@testing-library/react-native'
 import DashboardScreen from '../app/(dashboard)/index'
 import { useMobileAuth } from '@/lib/auth-context'
 import { apiClient } from '@selph/shared'
 
+type AppStateEvent = Parameters<typeof AppState.addEventListener>[0]
+
 jest.mock('@/lib/auth-context', () => ({
   useMobileAuth: jest.fn(),
 }))
+
+// Panels fetch on mount and have their own tests; stub them so they do not consume the ordered
+// apiClient.get mock responses this suite feeds to the dashboard itself.
+jest.mock('@/components/briefings-panel', () => ({ BriefingsPanel: () => null }))
+jest.mock('@/components/vip-tiers-panel', () => ({ VipTiersPanel: () => null }))
 
 jest.mock('@selph/shared', () => ({
   apiClient: {
@@ -236,10 +243,10 @@ describe('Dashboard screen (mobile)', () => {
   })
 
   it('refreshes dashboard when app returns to foreground', async () => {
-    let appStateHandler: ((state: string) => void) | undefined
+    let appStateHandler: ((state: AppStateStatus) => void) | undefined
     const removeMock = jest.fn()
     jest.spyOn(AppState, 'addEventListener').mockImplementation(
-      (_event: string, handler: (state: string) => void) => {
+      (_event: AppStateEvent, handler: (state: AppStateStatus) => void) => {
         appStateHandler = handler
         return { remove: removeMock } as any
       }

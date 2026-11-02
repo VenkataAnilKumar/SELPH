@@ -38,6 +38,12 @@ from app.services.moderation import ModerationService
 logger = logging.getLogger(__name__)
 
 
+def _settings():
+    from app.config import get_settings
+
+    return get_settings()
+
+
 class TwinEngineState(TypedDict, total=False):
     """State flowing through the Twin Engine graph."""
     message_id: str
@@ -64,6 +70,14 @@ class TwinEngineState(TypedDict, total=False):
     flagged_for_review: bool
     audit_event: dict
     graph_start_ns: int
+    metrics: dict
+    briefing_ids_referenced: list
+    estimated_input_tokens: int
+    estimated_output_tokens: int
+    estimated_total_tokens: int
+    estimated_cost_usd: float
+    llm_model: str
+    fallback_reason: str | None
 
 
 def _now_iso() -> str:
@@ -171,6 +185,66 @@ def score_and_moderate_node(state: TwinEngineState) -> TwinEngineState:
         return {"error": str(exc)}
 
 
+def finalize_node(state: TwinEngineState) -> TwinEngineState:
+    """
+    Bookkeeping that every draft needs, whichever way moderation routes it: count which active
+    briefings the draft used (and retire any that hit max_uses), and estimate token usage / cost.
+    """
+    if state.get("error"):
+        return state
+    try:
+        ctx = state["ctx"]
+        draft = state["draft"]
+        source = state.get("generation_source")
+        gen = state.get("generation_metrics") or {}
+
+        referenced = TwinEngineService._get_referenced_briefings(ctx, draft)
+        TwinEngineService._increment_briefing_use_counts(state["db"], referenced)
+
+        llm_model = _settings().default_llm_model if source == "llm" else "deterministic-fallback"
+        fallback_reason = gen.get("fallback_reason") if source != "llm" else None
+        input_tokens = (
+            TwinEngineService._estimate_tokens(state.get("system_prompt") or "")
+            + TwinEngineService._estimate_tokens(state.get("user_prompt") or "")
+        )
+        output_tokens = TwinEngineService._estimate_tokens(draft)
+        cost = (
+            TwinEngineService._estimate_cost_usd(_settings().default_llm_model, input_tokens, output_tokens)
+            if source == "llm"
+            else 0.0
+        )
+        start_ns = state.get("graph_start_ns")
+        latency_ms = int((time.perf_counter_ns() - start_ns) / 1_000_000) if isinstance(start_ns, int) else 0
+        metrics = {
+            "pipeline_latency_ms": latency_ms,
+            "llm_latency_ms": gen.get("llm_latency_ms", 0),
+            "parse_retry_count": gen.get("parse_retry_count", 0),
+            "llm_calls": gen.get("llm_calls", 0),
+            "used_fallback": source != "llm",
+            "briefings_referenced_count": len(referenced),
+            "briefing_ids_referenced": [b.id for b in referenced],
+            "llm_model": llm_model,
+            "fallback_reason": fallback_reason,
+            "estimated_input_tokens": input_tokens,
+            "estimated_output_tokens": output_tokens,
+            "estimated_total_tokens": input_tokens + output_tokens,
+            "estimated_cost_usd": cost,
+        }
+        return {
+            "metrics": metrics,
+            "briefing_ids_referenced": metrics["briefing_ids_referenced"],
+            "estimated_input_tokens": input_tokens,
+            "estimated_output_tokens": output_tokens,
+            "estimated_total_tokens": input_tokens + output_tokens,
+            "estimated_cost_usd": cost,
+            "llm_model": llm_model,
+            "fallback_reason": fallback_reason,
+        }
+    except Exception as exc:
+        logger.exception("finalize_node failed")
+        return {"error": str(exc)}
+
+
 def route_after_moderation(state: TwinEngineState) -> Literal["await_human", "flag_for_review"]:
     """Conditional router: HITL if safe, else flag for manual review."""
     if state.get("error") or not state.get("moderation_passed", False):
@@ -245,8 +319,10 @@ def _persist_audit(db: Session | None, audit: dict, user_id: str | None) -> None
             details=audit,
             timestamp=datetime.now(timezone.utc),
         )
-        db.add(log)
-        db.flush()  # or commit if the caller expects it; flush keeps transaction control with caller
+        # Savepoint: a failed audit write must never leave the caller's transaction unusable.
+        with db.begin_nested():
+            db.add(log)
+            db.flush()
         logger.debug("Persisted TwinEngine audit for message_id=%s", audit.get("message_id"))
     except Exception as exc:
         logger.warning("Failed to persist TwinEngine audit event: %s", exc)
@@ -316,8 +392,8 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     ctx_obj = state.get("ctx")
     has_briefing = None
     try:
-        if ctx_obj and hasattr(ctx_obj, "briefing"):
-            has_briefing = bool(getattr(ctx_obj, "briefing", None))
+        if ctx_obj is not None and hasattr(ctx_obj, "active_briefings"):
+            has_briefing = bool(ctx_obj.active_briefings)
     except Exception:
         pass
     context_signals = {
@@ -366,13 +442,21 @@ def audit_log_node(state: TwinEngineState) -> TwinEngineState:
     return {"result": result, "audit_event": audit}
 
 
-def build_twin_graph() -> Any:
-    """Compile the Twin Engine StateGraph with HITL interrupt, conditional safety routing, and audit logging."""
+def build_twin_graph(interrupt: bool = True) -> Any:
+    """
+    Compile the Twin Engine StateGraph with conditional safety routing and audit logging.
+
+    interrupt=True pauses before the human node (for deployments with a checkpointer that resume
+    the graph after a decision). interrupt=False runs straight through, which is how the live draft
+    path uses it: the saved pending draft in the database is the human checkpoint, and the approve
+    endpoint is the resume.
+    """
     workflow = StateGraph(TwinEngineState)
 
     workflow.add_node("load_context", load_context_node)
     workflow.add_node("generate_draft", generate_draft_node)
     workflow.add_node("score_and_moderate", score_and_moderate_node)
+    workflow.add_node("finalize", finalize_node)
     workflow.add_node("await_human", await_human_node)
     workflow.add_node("flag_for_review", flag_for_review_node)
     workflow.add_node("process_decision", process_decision_node)
@@ -381,8 +465,9 @@ def build_twin_graph() -> Any:
     workflow.set_entry_point("load_context")
     workflow.add_edge("load_context", "generate_draft")
     workflow.add_edge("generate_draft", "score_and_moderate")
+    workflow.add_edge("score_and_moderate", "finalize")
     workflow.add_conditional_edges(
-        "score_and_moderate",
+        "finalize",
         route_after_moderation,
         {
             "await_human": "await_human",
@@ -396,9 +481,57 @@ def build_twin_graph() -> Any:
 
     # Interrupt before human node so the graph can be resumed after approval.
     # Checkpointer (PostgresSaver / RedisSaver) should be supplied at compile time in production.
-    graph = workflow.compile(interrupt_before=["await_human"])
+    graph = workflow.compile(interrupt_before=["await_human"]) if interrupt else workflow.compile()
     return graph
 
 
+_ENGINE_GRAPH: Any = None
+
+
+def _engine_graph() -> Any:
+    global _ENGINE_GRAPH
+    if _ENGINE_GRAPH is None:
+        _ENGINE_GRAPH = build_twin_graph(interrupt=False)
+    return _ENGINE_GRAPH
+
+
+def run_twin_graph(db: Session, message_id: str, user_id: str) -> dict:
+    """
+    Run the Twin Engine graph for one message and return the draft plus metadata.
+
+    This is the live engine: load context -> generate (one retry) -> moderate -> bookkeeping ->
+    route (flag or ready for the human) -> audit event. Raises ValueError when no draft could be
+    produced (message/twin/identity missing, or generation failed after its retry).
+    """
+    final = _engine_graph().invoke({"message_id": message_id, "user_id": user_id, "db": db})
+    if final.get("error"):
+        raise ValueError(final["error"])
+
+    ctx = final["ctx"]
+    metrics = final["metrics"]
+    return {
+        "twin_id": ctx.twin.id,
+        "draft": final["draft"],
+        "confidence_score": final["confidence_score"],
+        "confidence_label": final["confidence_label"],
+        "confidence_reasoning": final["reasoning"],
+        "confidence_factors": final["factors"],
+        "moderation_passed": final["moderation_passed"],
+        "moderation_flags": (final.get("moderation_flags") or []) + (final.get("generator_flags") or []),
+        "system_prompt": final["system_prompt"],
+        "user_prompt": final["user_prompt"],
+        "generation_source": final["generation_source"],
+        "llm_model": final["llm_model"],
+        "fallback_reason": final["fallback_reason"],
+        "briefing_ids_referenced": final["briefing_ids_referenced"],
+        "estimated_input_tokens": final["estimated_input_tokens"],
+        "estimated_output_tokens": final["estimated_output_tokens"],
+        "estimated_total_tokens": final["estimated_total_tokens"],
+        "estimated_cost_usd": final["estimated_cost_usd"],
+        "metrics": metrics,
+        "audit_event": final.get("audit_event"),
+    }
+
+
 # Convenience re-export
-__all__ = ["build_twin_graph", "TwinEngineState"]
+__all__ = ["build_twin_graph", "run_twin_graph", "TwinEngineState"]

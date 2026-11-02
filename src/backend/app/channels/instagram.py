@@ -162,6 +162,8 @@ class InstagramAdapter(ChannelAdapter):
             True if signature is valid, False otherwise.
         """
         settings = get_settings()
+        if not settings.meta_app_secret:
+            return False  # never validate against an empty key: it is trivially forgeable
         if not signature_header or not signature_header.startswith("sha256="):
             return False
         mac = hmac.new(
@@ -171,7 +173,7 @@ class InstagramAdapter(ChannelAdapter):
         )
         expected = mac.hexdigest()
         received = signature_header[len("sha256="):]
-        return hmac.compare_digest(expected, received)
+        return hmac.compare_digest(expected.encode("ascii"), received.encode("utf-8", "ignore"))
 
     def parse_webhook_event(self, body: dict) -> list[NormalizedMessage]:
         """

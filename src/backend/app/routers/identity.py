@@ -272,9 +272,8 @@ async def get_identity_confidence(
     """
     Get the twin's identity confidence score.
 
-    Stub implementation: score is based on profile completeness (0–1).
-    Phase 2 will replace this with an embedding-based similarity score
-    derived from approved draft history.
+    Blends profile completeness with learned evidence from the user's own
+    approve / edit / reject decisions (see IdentityService.get_confidence_score).
     """
     result = IdentityService.get_confidence_score(db, current_user.id)
     return IdentityConfidenceResponse(**result)

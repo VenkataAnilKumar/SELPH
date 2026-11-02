@@ -1,11 +1,12 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { authStorage } from '../lib/auth-storage'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { apiClient } from '@selph/shared'
 
 const mockPush = jest.fn()
 const mockPost = jest.fn()
+let mockUnauthorizedHandler: (() => void) | undefined
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -18,6 +19,9 @@ jest.mock(
   () => ({
     apiClient: {
       post: (...args: unknown[]) => mockPost(...args),
+      setUnauthorizedHandler: (fn?: () => void) => {
+        mockUnauthorizedHandler = fn
+      },
       defaults: {
         headers: {
           common: {},
@@ -94,8 +98,10 @@ describe('AuthProvider (web)', () => {
     delete (apiClient.defaults.headers.common as Record<string, string>).Authorization
   })
 
-  it('hydrates authenticated state from storage', async () => {
+  it('hydrates authenticated state from storage and restores the API token', async () => {
     jest.spyOn(authStorage, 'getUser').mockReturnValue(user)
+    jest.spyOn(authStorage, 'getAccessToken').mockReturnValue('stored-access')
+    delete (apiClient.defaults.headers.common as Record<string, string>)['Authorization']
 
     render(
       <AuthProvider>
@@ -108,6 +114,46 @@ describe('AuthProvider (web)', () => {
     })
 
     expect(screen.getByTestId('is-auth')).toHaveTextContent('true')
+    // Without this, a page reload left the UI logged in while every API call was unauthenticated.
+    expect((apiClient.defaults.headers.common as Record<string, string>)['Authorization']).toBe('Bearer stored-access')
+  })
+
+  it('treats a stored user without a token as logged out and clears the leftovers', async () => {
+    jest.spyOn(authStorage, 'getUser').mockReturnValue(user)
+    jest.spyOn(authStorage, 'getAccessToken').mockReturnValue(null)
+    const clearSpy = jest.spyOn(authStorage, 'clearTokens')
+
+    render(
+      <AuthProvider>
+        <AuthHarness />
+      </AuthProvider>
+    )
+
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+    expect(screen.getByTestId('is-auth')).toHaveTextContent('false')
+    expect(clearSpy).toHaveBeenCalled()
+  })
+
+  it('ends the session and goes to login when the API rejects the token (401)', async () => {
+    jest.spyOn(authStorage, 'getUser').mockReturnValue(user)
+    jest.spyOn(authStorage, 'getAccessToken').mockReturnValue('revoked-token')
+    const clearSpy = jest.spyOn(authStorage, 'clearTokens')
+    mockPush.mockClear()
+
+    render(
+      <AuthProvider>
+        <AuthHarness />
+      </AuthProvider>
+    )
+    await waitFor(() => expect(screen.getByTestId('is-auth')).toHaveTextContent('true'))
+    expect(mockUnauthorizedHandler).toBeDefined()
+
+    act(() => mockUnauthorizedHandler!())
+
+    await waitFor(() => expect(screen.getByTestId('is-auth')).toHaveTextContent('false'))
+    expect(clearSpy).toHaveBeenCalled()
+    expect(mockPush).toHaveBeenCalledWith('/auth/login')
+    expect((apiClient.defaults.headers.common as Record<string, string>)['Authorization']).toBeUndefined()
   })
 
   it('logs in and navigates to dashboard', async () => {
