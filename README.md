@@ -28,7 +28,7 @@ SELPH learns how you write, drafts a reply to each incoming message, and puts yo
 
 <div align="center">
 
-![SELPH landing page](assets/screenshots/landing.png)
+![SELPH landing page](demo/landing.png)
 
 </div>
 
@@ -40,14 +40,14 @@ SELPH learns how you write, drafts a reply to each incoming message, and puts yo
 
 **Review every draft.** Each reply shows its confidence and where it came from. Risky messages are flagged with the reason, and flagged drafts are never sent automatically.
 
-![Pending drafts with a flagged message](assets/screenshots/dashboard-drafts.png)
+![Pending drafts with a flagged message](demo/dashboard-drafts.png)
 
 </td>
 <td width="45%" valign="top">
 
 **Steer your twin.** Tell it something once with a *briefing* ("at a conference, keep it short"). Mark people as *VIP* so their messages skip the twin entirely.
 
-![Briefings and VIP senders](assets/screenshots/dashboard-controls.png)
+![Briefings and VIP senders](demo/dashboard-controls.png)
 
 </td>
 </tr>
@@ -59,8 +59,8 @@ SELPH learns how you write, drafts a reply to each incoming message, and puts yo
 
 <table>
 <tr>
-<td width="25%" valign="top"><img src="assets/screenshots/dashboard-phone.png" alt="Dashboard on a phone"/></td>
-<td valign="top"><img src="assets/screenshots/landing-trust.png" alt="Safety principles on the landing page"/></td>
+<td width="25%" valign="top"><img src="demo/dashboard-phone.png" alt="Dashboard on a phone"/></td>
+<td valign="top"><img src="demo/landing-trust.png" alt="Safety principles on the landing page"/></td>
 </tr>
 </table>
 
@@ -230,6 +230,7 @@ src/
 ├── mobile/           Expo app
 ├── landing/          static marketing site
 └── shared/           typed API client used by web and mobile
+demo/                 screenshots of the product, plus the script that retakes them
 docs/                 product, specs, safety, technical, implementation
 scripts/              browser end-to-end test
 ```
@@ -285,6 +286,7 @@ CI runs all of this, plus type-checking for web, landing and mobile, production 
 | | |
 |---|---|
 | [DEMO.md](DEMO.md) | Hands-on walkthrough with every API call |
+| [demo/](demo/README.md) | Screenshots of the product, with captions and how to link them |
 | [Product vision](docs/01-product/PRODUCT_IDEA.md) · [PRD](docs/01-product/PRD.md) | What and why |
 | [System architecture](docs/05-technical/SELPH_System-Architecture.md) · [API design](docs/05-technical/SELPH_API-Design.md) · [Database schema](docs/05-technical/SELPH_Database-Schema.md) | How it's built |
 | [Safety policy](docs/04-safety/SELPH_Canonical-Policy-Matrix.md) · [Privacy and consent](docs/04-safety/SELPH_Privacy-Consent.md) · [Security criteria](docs/04-safety/SECURITY_ACCEPTANCE_CRITERIA.md) | Trust |

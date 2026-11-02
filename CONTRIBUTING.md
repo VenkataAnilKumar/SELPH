@@ -18,8 +18,11 @@
 ```bash
 git clone https://github.com/VenkataAnilKumar/selph.git
 cd selph
-cp .env.example .env          # add your API keys
-docker compose up --build     # starts backend + PostgreSQL + Redis
+docker compose up --build     # starts backend + PostgreSQL + Redis + worker (runs migrations)
+npm ci                        # web, mobile and landing workspaces
+
+# Optional, for running the backend outside Docker or enabling a real LLM:
+cp src/backend/.env.example src/backend/.env   # settings are read from src/backend/.env
 ```
 
 Backend docs live at `http://localhost:8000/docs` once the stack is up.
