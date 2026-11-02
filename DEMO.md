@@ -1,5 +1,7 @@
 # SELPH — Local Walkthrough
 
+> Want to see it first? Screenshots of the web app and landing page are in **[demo/](demo/README.md)**.
+
 Run the whole product on your machine: **no LLM key, no Instagram/Gmail account, no cloud**.
 Every command below was run against the real API.
 
