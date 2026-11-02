@@ -39,12 +39,13 @@ export function SimulateMessage({ onIngested }: { onIngested: () => void | Promi
         content: content.trim(),
       })
       const data = response.data
+      // Refresh the dashboard first so the message never points at a list that does not show the draft yet.
+      setContent('')
+      await onIngested()
       if (data.draft_id) setResult('Draft created. Review it under Pending Drafts.')
       else if (data.routing_action === 'direct_notify') setResult('VIP sender: routed straight to you, no draft created.')
       else if (data.routing_action === 'skipped_manual_pause') setResult('Twin is paused: no draft created.')
       else setResult(`Message received (${data.routing_action || data.status}).`)
-      setContent('')
-      await onIngested()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to send test message')
     } finally {

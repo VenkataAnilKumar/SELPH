@@ -17,14 +17,44 @@ class ApiClient {
       },
     })
 
-    // Add auth token to requests
+    // Attach the stored token to every request. The web app stores it as `selph_access_token`;
+    // `access_token` is accepted for older sessions. (This used to read only `access_token`, so
+    // after a page reload no request carried a token.)
     this.client.interceptors.request.use((config) => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-      if (token) {
+      if (typeof window === 'undefined') return config
+      let token: string | null = null
+      try {
+        token = localStorage.getItem('selph_access_token') || localStorage.getItem('access_token')
+      } catch {
+        token = null // storage blocked (private mode): fall back to the default header, if any
+      }
+      if (token && !config.headers.Authorization) {
         config.headers.Authorization = `Bearer ${token}`
       }
       return config
     })
+
+    // A 401 from a protected call means the session is gone (expired, revoked by logout elsewhere).
+    // Let the app drop its local session instead of showing a broken page.
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const status = error?.response?.status
+        const url: string = error?.config?.url || ''
+        const isCredentialCall = /^\/auth\/(login|signup|refresh)/.test(url)
+        if (status === 401 && !isCredentialCall && this.unauthorizedHandler) {
+          this.unauthorizedHandler()
+        }
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  private unauthorizedHandler?: () => void
+
+  /** Register what to do when the API rejects the current session (401). */
+  setUnauthorizedHandler(handler?: () => void) {
+    this.unauthorizedHandler = handler
   }
 
   // Auth endpoints

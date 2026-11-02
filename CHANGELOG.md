@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 ## [Unreleased] - 2026-11 (fix round)
 
 ### Fixed
+- **Web: reloading the dashboard broke every API call.** The app restored the user from storage but never re-attached the token (and the shared API client read a different storage key than the web app writes), so any page reload returned 403s. Fixed both; a revoked or expired session now sends you to login instead of leaving a broken page.
+- Web: a logged-out visitor to `/dashboard` fired five unauthenticated API requests before being redirected.
+- Web: the dashboard header overflowed on phones (661px on a 390px screen); it now stacks.
+- Draft responses now include `moderation_flags`, and web and mobile show *why* a draft needs attention ("will not be sent automatically") instead of only a low-confidence label.
+- Simulate panel announced "Draft created" before the Pending Drafts list had refreshed.
 - **A Redis outage froze API requests** (ingest, approve, anything that queues a job): `.delay()` retried an unreachable Celery result backend with no practical limit. Publishing no longer touches the result backend and broker retries are bounded; with Redis down, ingest now returns in ~0.1s and still creates the draft. Also made backend CI hang for 12+ minutes (no Redis service there).
 - `JWT_EXPIRATION_HOURS` / `JWT_REFRESH_EXPIRATION_DAYS` were ignored (24 h / 7 d were hardcoded).
 - bcrypt/passlib logged a traceback on every startup (pinned `bcrypt==4.0.1`).
