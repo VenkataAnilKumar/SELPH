@@ -3,7 +3,9 @@ Configuration and settings for SELPH Backend
 """
 
 from functools import lru_cache
-from typing import List
+import json
+from typing import List, Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,12 +35,12 @@ class Settings(BaseSettings):
     jwt_refresh_expiration_days: int = 7
     
     # CORS
-    cors_origins: List[str] = [
+    cors_origins: Union[List[str], str] = [
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:8081",
     ]
-    allowed_hosts: List[str] = ["localhost", "127.0.0.1", "testserver"]
+    allowed_hosts: Union[List[str], str] = ["localhost", "127.0.0.1", "testserver"]
     
     # LLM Configuration
     default_llm_provider: str = "anthropic"
@@ -132,6 +134,21 @@ class Settings(BaseSettings):
     celery_task_soft_time_limit: int = 250
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
+    @field_validator("cors_origins", "allowed_hosts", mode="before")
+    @classmethod
+    def _parse_list(cls, value):
+        """
+        Accept `a,b,c` (what .env.example documents and hosting dashboards usually take) as well
+        as a JSON list. These fields used to accept only JSON, so copying .env.example crashed
+        the app at startup.
+        """
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [item.strip() for item in text.split(",") if item.strip()]
+        return value
 
 
 @lru_cache()
