@@ -439,101 +439,12 @@ class TwinEngineService:
     @staticmethod
     def run_twin_pipeline(db: Session, message_id: str, user_id: str) -> dict:
         """
-        Run Phase 2 Twin Engine v1 for a message.
+        Produce a draft for a message: the live Twin Engine.
 
-        Returns a dict with draft output, confidence metadata, and moderation result.
+        Runs the LangGraph engine (context -> generate -> moderate -> bookkeeping -> route -> audit)
+        and returns the draft, confidence, moderation result and metrics. Every run writes a
+        structured audit event. Raises ValueError if no draft could be produced.
         """
-        pipeline_start = time.perf_counter()
+        from app.services.twin_langgraph import run_twin_graph  # local import: the graph builds on this class
 
-        message = db.query(Message).filter(Message.id == message_id, Message.user_id == user_id).first()
-        if not message:
-            raise ValueError("Message not found")
-
-        ctx = TwinEngineService._load_context(db, message, user_id)
-        system_prompt, user_prompt = TwinEngineService._build_prompts(ctx)
-        draft, factors, generator_reasoning, generator_flags, generation_source, generation_metrics = TwinEngineService._generate_draft(
-            ctx,
-            system_prompt,
-            user_prompt,
-        )
-
-        referenced_briefings = TwinEngineService._get_referenced_briefings(ctx, draft)
-        TwinEngineService._increment_briefing_use_counts(db, referenced_briefings)
-
-        confidence_score = TwinEngineService._compute_overall_confidence(factors)
-        confidence_label = ModerationService.get_confidence_label(confidence_score)
-
-        moderation_passed, flags, risk_score = ModerationService.moderate_reply(message.content, draft)
-
-        if not moderation_passed:
-            confidence_score = min(confidence_score, 0.3)
-            confidence_label = ModerationService.get_confidence_label(confidence_score)
-
-        reasoning = (
-            f"{generator_reasoning} Generated with channel='{message.channel}', "
-            f"topic_known={factors['topic_known']}, no_avoided_topics={factors['no_avoided_topics']}, "
-            f"moderation_risk={risk_score}."
-        )
-
-        pipeline_latency_ms = int((time.perf_counter() - pipeline_start) * 1000)
-        llm_model = settings.default_llm_model if generation_source == "llm" else "deterministic-fallback"
-        fallback_reason = generation_metrics.get("fallback_reason") if generation_source != "llm" else None
-
-        estimated_input_tokens = TwinEngineService._estimate_tokens(system_prompt) + TwinEngineService._estimate_tokens(user_prompt)
-        estimated_output_tokens = TwinEngineService._estimate_tokens(draft)
-        estimated_total_tokens = estimated_input_tokens + estimated_output_tokens
-        estimated_cost_usd = TwinEngineService._estimate_cost_usd(
-            settings.default_llm_model,
-            estimated_input_tokens,
-            estimated_output_tokens,
-        ) if generation_source == "llm" else 0.0
-
-        metrics = {
-            "pipeline_latency_ms": pipeline_latency_ms,
-            "llm_latency_ms": generation_metrics.get("llm_latency_ms", 0),
-            "parse_retry_count": generation_metrics.get("parse_retry_count", 0),
-            "llm_calls": generation_metrics.get("llm_calls", 0),
-            "used_fallback": generation_source != "llm",
-            "briefings_referenced_count": len(referenced_briefings),
-            "briefing_ids_referenced": [b.id for b in referenced_briefings],
-            "llm_model": llm_model,
-            "fallback_reason": fallback_reason,
-            "estimated_input_tokens": estimated_input_tokens,
-            "estimated_output_tokens": estimated_output_tokens,
-            "estimated_total_tokens": estimated_total_tokens,
-            "estimated_cost_usd": estimated_cost_usd,
-        }
-
-        logger.info(
-            "Twin pipeline completed message_id=%s user_id=%s source=%s confidence=%.2f moderation_passed=%s pipeline_latency_ms=%s llm_latency_ms=%s parse_retry_count=%s",
-            message.id,
-            user_id,
-            generation_source,
-            confidence_score,
-            moderation_passed,
-            metrics["pipeline_latency_ms"],
-            metrics["llm_latency_ms"],
-            metrics["parse_retry_count"],
-        )
-
-        return {
-            "twin_id": ctx.twin.id,
-            "draft": draft,
-            "confidence_score": confidence_score,
-            "confidence_label": confidence_label,
-            "confidence_reasoning": reasoning,
-            "confidence_factors": factors,
-            "moderation_passed": moderation_passed,
-            "moderation_flags": flags + generator_flags,
-            "system_prompt": system_prompt,
-            "user_prompt": user_prompt,
-            "generation_source": generation_source,
-            "llm_model": llm_model,
-            "fallback_reason": fallback_reason,
-            "briefing_ids_referenced": [b.id for b in referenced_briefings],
-            "estimated_input_tokens": estimated_input_tokens,
-            "estimated_output_tokens": estimated_output_tokens,
-            "estimated_total_tokens": estimated_total_tokens,
-            "estimated_cost_usd": estimated_cost_usd,
-            "metrics": metrics,
-        }
+        return run_twin_graph(db, message_id, user_id)

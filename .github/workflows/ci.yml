@@ -84,6 +84,50 @@ jobs:
       - name: Run mobile tests
         run: npm test --workspace=src/mobile -- --runInBand --ci
 
+  docker-stack:
+    name: Docker Stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the compose stack
+        run: docker compose up --build -d
+
+      - name: Wait for the API to be ready (migrations run on start)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/ready >/dev/null 2>&1; then echo "ready after $((i*3))s"; exit 0; fi
+            sleep 3
+          done
+          echo "API never became ready"; docker compose logs backend | tail -50; exit 1
+
+      - name: Worker can run every job the app publishes
+        run: |
+          # Every task module is registered (an unregistered task is discarded by the worker)
+          docker compose exec -T celery_worker celery -A app.celery_app inspect registered | tee /tmp/registered.txt
+          for t in push_notifications.notify_draft_ready push_notifications.notify_vip_message send_reply.send_channel_reply draft_generation.generate_draft_for_message; do
+            grep -q "$t" /tmp/registered.txt || { echo "worker has not registered $t"; exit 1; }
+          done
+          # ...and consumes every queue (delivery jobs go to "channels")
+          docker compose exec -T celery_worker celery -A app.celery_app inspect active_queues | tee /tmp/queues.txt
+          for q in celery draft_generation message_processing voice_synthesis avatar_generation channels; do
+            grep -q "'name': '$q'" /tmp/queues.txt || { echo "worker does not consume queue $q"; exit 1; }
+          done
+
+      - name: Walk through the product against the running stack
+        run: |
+          pip install httpx
+          python src/backend/scripts/local_e2e.py
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --tail=80
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
   migration-smoke:
     name: Migration Smoke
     runs-on: ubuntu-latest

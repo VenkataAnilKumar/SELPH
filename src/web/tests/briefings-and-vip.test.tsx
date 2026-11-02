@@ -43,6 +43,20 @@ describe("BriefingsPanel", () => {
     expect(await screen.findByText(/No active briefings/)).toBeInTheDocument();
   });
 
+  it("keeps option labels short and explains the selected type underneath", async () => {
+    getMock.mockResolvedValue({ data: { active_count: 0, items: [] } });
+    render(<BriefingsPanel />);
+    await screen.findByText(/No active briefings/);
+
+    // Long "Label — hint" options were clipped by the select; labels are short and the hint is separate.
+    const options = Array.from(screen.getByLabelText("Briefing type").querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toEqual(["Availability", "Instruction", "Fact", "Opinion", "Boundary"]);
+    expect(screen.getByTestId("briefing-type-hint")).toHaveTextContent(/added to drafts as a heads-up/i);
+
+    fireEvent.change(screen.getByLabelText("Briefing type"), { target: { value: "boundary" } });
+    expect(screen.getByTestId("briefing-type-hint")).toHaveTextContent(/stay away from/i);
+  });
+
   it("requires topic and content, then posts the briefing with an expiry", async () => {
     getMock.mockResolvedValue({ data: { active_count: 0, items: [] } });
     postMock.mockResolvedValue({ data: {} });

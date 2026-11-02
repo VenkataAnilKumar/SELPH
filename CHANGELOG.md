@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased] - 2026-11 (fix round)
 
 ### Fixed
+- **Deployed workers could not deliver replies or send notifications** (found by running the real Docker stack): no worker consumed the `channels` queue, so approved replies waited in Redis forever, and the worker never loaded `push_notifications`, so draft-ready and VIP notifications were rejected as "unregistered task". The queue list is now defined once (`WORKER_QUEUES`, used by `worker.py`, checked against both compose files by a test) and every task module is registered explicitly. The secondary `src/backend/docker-compose.yml` also pointed at a module that does not exist.
+- **The LangGraph engine was built but not used.** It is now the live draft path (non-pausing: the saved pending draft is the human checkpoint), so every draft writes a structured audit event. Also fixes the audit's `has_briefing` signal, which read a non-existent attribute and was never true, and writes the audit inside a savepoint so a failed audit write cannot break drafting.
+- Briefing type dropdown clipped its label; the hint now shows beneath.
 - **Web: reloading the dashboard broke every API call.** The app restored the user from storage but never re-attached the token (and the shared API client read a different storage key than the web app writes), so any page reload returned 403s. Fixed both; a revoked or expired session now sends you to login instead of leaving a broken page.
 - Web: a logged-out visitor to `/dashboard` fired five unauthenticated API requests before being redirected.
 - Web: the dashboard header overflowed on phones (661px on a 390px screen); it now stacks.

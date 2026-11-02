@@ -8,11 +8,40 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# Every module that defines tasks. Listed explicitly so a worker registers all of them:
+# autodiscover only looks for a module literally named `tasks`, so a module missing from here
+# (and from app/tasks/__init__.py) had its tasks rejected as "unregistered" (this silently
+# dropped push notifications).
+TASK_MODULES = [
+    "app.tasks.avatar_generation",
+    "app.tasks.draft_generation",
+    "app.tasks.message_processing",
+    "app.tasks.proactive_scan",
+    "app.tasks.push_notifications",
+    "app.tasks.send_reply",
+    "app.tasks.style_evolution",
+    "app.tasks.surge_check",
+    "app.tasks.t2t_negotiation",
+    "app.tasks.voice_synthesis",
+]
+
+# Queues a worker must consume. Tasks that declare queue="..." publish there, so a queue missing
+# from this list means its jobs wait in Redis forever (delivery jobs use "channels").
+WORKER_QUEUES = (
+    "celery",
+    "draft_generation",
+    "message_processing",
+    "voice_synthesis",
+    "avatar_generation",
+    "channels",
+)
+
 # Initialize Celery app
 celery_app = Celery(
     "selph",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
+    include=TASK_MODULES,
 )
 
 # Celery configuration

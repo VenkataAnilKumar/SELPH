@@ -189,7 +189,7 @@ flowchart TB
 
     subgraph Backend["FastAPI backend"]
         API["REST API /v1"]
-        E["Twin engine"]
+        E["Twin engine<br/>LangGraph"]
         S["Safety checks"]
     end
 
@@ -271,11 +271,11 @@ CI runs all of this, plus type-checking for web, landing and mobile, production 
 
 - **Instagram and Gmail** require your own Meta and Google developer apps (Instagram needs a Business account and app review). The integrations are built but haven't been exercised against live accounts.
 - **Draft quality with a real model** hasn't been measured yet. The built-in drafter produces safe scaffolds you edit, not finished prose.
-- **Deployment**: the Docker setup is provided but is a development stack. Production hosting, TLS, and secrets are yours to provision. Follow the production checklist in the [security criteria](docs/04-safety/SECURITY_ACCEPTANCE_CRITERIA.md#production-checklist).
+- **Deployment**: `docker compose up --build` builds and starts the whole backend (Postgres + pgvector, Redis, API with migrations, worker, Flower), and CI builds and exercises that stack on every change. It is a development stack: production hosting, TLS and secrets are yours to provision. Follow the production checklist in the [security criteria](docs/04-safety/SECURITY_ACCEPTANCE_CRITERIA.md#production-checklist).
 
 **Honest notes:**
 
-- A LangGraph version of the twin engine (interruptible, with richer audit events) exists and is tested, but the live draft path uses the simpler sequential pipeline.
+- The twin engine is a LangGraph pipeline (context, draft with one retry, safety checks, routing, audit). It runs straight through: the saved pending draft is the human checkpoint, and approving is the resume. Every draft writes a structured audit event with risk, priority and latency.
 - Voice and avatar models held by third-party providers aren't deleted by account erasure, because the provider integrations have no delete call. The deletion certificate says so.
 
 **Planned:** open-source voice and avatar providers, more channels, and content provenance (C2PA).

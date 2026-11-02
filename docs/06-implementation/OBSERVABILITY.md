@@ -62,3 +62,19 @@ max by (queue) (selph_celery_queue_depth)
 | Broker down | `selph_broker_up == 0` | 2m |
 | Review backlog | `selph_drafts{status="pending_approval"} > 200` | 1h |
 | Approval quality drop | weekly approved-without-edit share < 40% | 1d |
+
+## Audit events
+
+Every draft also writes a structured audit event (`audit_logs`, `action = 'twin_engine_audit'`) with `event_type`
+(`ready_for_hitl` or `flagged_for_review`), `risk_band`, `priority_score`, `hitl_priority`, `latency_band`,
+`graph_duration_ms`, `generation_source`, `generation_attempts`, `moderation_flags`, `context_signals` and
+`error_category`. Use it to rank the review queue and to triage slow or failing generations:
+
+```sql
+SELECT details->>'event_type' AS event, details->>'risk_band' AS risk, count(*)
+FROM audit_logs WHERE action = 'twin_engine_audit' AND created_at > now() - interval '1 day'
+GROUP BY 1, 2 ORDER BY 3 DESC;
+```
+
+Account erasure keeps these rows anonymized (identifying details are stripped).
+

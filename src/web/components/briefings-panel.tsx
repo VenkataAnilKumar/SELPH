@@ -112,10 +112,13 @@ export const BriefingsPanel = () => {
         >
           {BRIEFING_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
-              {t.label} — {t.hint}
+              {t.label}
             </option>
           ))}
         </select>
+        <p className="-mt-1 text-xs text-gray-500 md:col-span-2" data-testid="briefing-type-hint">
+          {BRIEFING_TYPES.find((t) => t.value === type)?.hint}
+        </p>
         <input
           aria-label="Briefing topic"
           placeholder="Topic (e.g. conference week)"

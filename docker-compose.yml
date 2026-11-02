@@ -88,7 +88,7 @@ services:
       CELERY_RESULT_BACKEND: redis://:redis_dev_password@redis:6379/2
       ENVIRONMENT: development
       LOG_LEVEL: INFO
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 --queues=celery,draft_generation,message_processing,voice_synthesis,avatar_generation
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 --queues=celery,draft_generation,message_processing,voice_synthesis,avatar_generation,channels
     depends_on:
       - postgres
       - redis
