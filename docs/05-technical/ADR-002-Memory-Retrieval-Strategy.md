@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — 2026-11-02
+Implemented — 2026-11-03 (feature flag default off)
 
 ## Context
 
@@ -42,12 +42,12 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 
 ## Follow-ups
 
-- Implement the hybrid scorer behind `FEATURE_HYBRID_HISTORY=true`.
+- Implement the hybrid scorer behind `FEATURE_HYBRID_HISTORY=true`. **Done 2026-11-03.**
 - Add a unit test that verifies a relevant older message outranks a recent irrelevant one.
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
-- `src/backend/app/services/twin_engine.py` (`_load_context`)
+- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)

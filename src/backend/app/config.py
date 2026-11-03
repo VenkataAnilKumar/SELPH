@@ -117,6 +117,8 @@ class Settings(BaseSettings):
     feature_gmail: bool = False
     feature_twitter: bool = False
     feature_whatsapp: bool = False
+    # Hybrid short-term memory retrieval (ADR-002). Default off: pure recency of 5.
+    feature_hybrid_history: bool = False
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600

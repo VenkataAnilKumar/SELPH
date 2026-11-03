@@ -199,6 +199,38 @@ class TwinEngineService:
         return draft, normalized, reasoning, flags, metrics
 
     @staticmethod
+    def _score_history_message(msg: Message, incoming_content: str, rank: int, pool_size: int) -> float:
+        """Hybrid score: 0.7 recency decay + 0.3 token overlap. Higher is better."""
+        # Recency: 1.0 for most recent (rank 0), decaying linearly
+        recency = max(0.0, 1.0 - (rank / max(pool_size, 1)))
+        # Token overlap with incoming message
+        incoming_tokens = set(TwinEngineService._extract_reference_tokens(incoming_content))
+        msg_tokens = set(TwinEngineService._extract_reference_tokens(msg.content or ""))
+        overlap = len(incoming_tokens & msg_tokens) / max(len(incoming_tokens), 1) if incoming_tokens else 0.0
+        return 0.7 * recency + 0.3 * overlap
+
+    @staticmethod
+    def _load_hybrid_history(db: Session, message: Message, user_id: str) -> list[Message]:
+        """Load top-5 history by hybrid score from a pool of 20 recent messages."""
+        pool = db.query(Message).filter(
+            Message.user_id == user_id,
+            Message.sender_id == message.sender_id,
+            Message.channel == message.channel,
+            Message.id != message.id,
+        ).order_by(Message.created_at.desc()).limit(20).all()
+
+        if len(pool) <= 5:
+            return pool
+
+        scored = [
+            (TwinEngineService._score_history_message(m, message.content or "", i, len(pool)), m)
+            for i, m in enumerate(pool)
+        ]
+        # Highest score first; stable for ties by original order (already recent-first)
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [m for _, m in scored[:5]]
+
+    @staticmethod
     def _load_context(db: Session, message: Message, user_id: str) -> TwinContext:
         twin = db.query(Twin).filter(Twin.user_id == user_id).first()
         identity = db.query(IdentityProfile).filter(IdentityProfile.user_id == user_id).first()
@@ -221,12 +253,15 @@ class TwinEngineService:
             ).all()
         ]
 
-        history = db.query(Message).filter(
-            Message.user_id == user_id,
-            Message.sender_id == message.sender_id,
-            Message.channel == message.channel,
-            Message.id != message.id,
-        ).order_by(Message.created_at.desc()).limit(5).all()
+        if settings.feature_hybrid_history:
+            history = TwinEngineService._load_hybrid_history(db, message, user_id)
+        else:
+            history = db.query(Message).filter(
+                Message.user_id == user_id,
+                Message.sender_id == message.sender_id,
+                Message.channel == message.channel,
+                Message.id != message.id,
+            ).order_by(Message.created_at.desc()).limit(5).all()
 
         constraints = CHANNEL_CONSTRAINTS.get(
             message.channel,
