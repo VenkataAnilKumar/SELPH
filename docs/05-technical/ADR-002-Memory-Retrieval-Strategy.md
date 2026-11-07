@@ -3,6 +3,7 @@
 ## Status
 
 Implemented — 2026-11-03 (feature flag default off)
+Fully restored with stopword filtering, relative timestamps, and debug logging — 2026-11-07
 
 ## Context
 
@@ -21,7 +22,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
-As of 2026-11-06, history prompts include relative timestamps for better LLM grounding, and hybrid mode logs top scores for observability.
+As of 2026-11-06 / 2026-11-07, history prompts include relative timestamps for better LLM grounding, and hybrid mode logs top scores for observability.
 
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
@@ -49,12 +50,12 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Implement the hybrid scorer behind `FEATURE_HYBRID_HISTORY=true`. **Done 2026-11-03.**
 - Add a unit test that verifies a relevant older message outranks a recent irrelevant one. **Done 2026-11-04.**
 - Filter common stopwords in token overlap for higher precision. **Done 2026-11-05.**
-- Enrich history prompt with relative timestamps + hybrid score debug logging. **Done 2026-11-06.**
+- Enrich history prompt with relative timestamps + hybrid score debug logging. **Done 2026-11-06 / restored 2026-11-07.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
-- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`)
+- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
