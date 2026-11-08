@@ -132,10 +132,19 @@ class TwinEngineService:
         if seconds < 60:
             return "just now"
         if seconds < 3600:
-            return f"{int(seconds // 60)}m ago"
+            mins = int(seconds // 60)
+            return f"{mins}m ago"
         if seconds < 86400:
-            return f"{int(seconds // 3600)}h ago"
-        return f"{int(seconds // 86400)}d ago"
+            hours = int(seconds // 3600)
+            return f"{hours}h ago"
+        days = int(seconds // 86400)
+        if days == 1:
+            return "yesterday"
+        if days < 7:
+            return f"{days}d ago"
+        if days < 14:
+            return "last week"
+        return f"{days}d ago"
 
     @staticmethod
     def _build_history_prompt(messages: list[Message]) -> str:

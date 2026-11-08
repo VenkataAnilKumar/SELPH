@@ -1,7 +1,7 @@
 """Unit tests for hybrid short-term memory retrieval (ADR-002)."""
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,12 +10,12 @@ from app.services.twin_engine import TwinEngineService
 from app.models.message import Message
 
 
-def _make_message(content: str, rank_hint: int = 0) -> Message:
+def _make_message(content: str, rank_hint: int = 0, created_at: datetime | None = None) -> Message:
     """Create a lightweight Message-like object for scoring tests."""
     msg = MagicMock(spec=Message)
     msg.content = content
     msg.id = f"msg-{rank_hint}"
-    msg.created_at = datetime.now(UTC)
+    msg.created_at = created_at or datetime.now(UTC)
     return msg
 
 
@@ -81,3 +81,27 @@ def test_load_hybrid_history_selects_top_scored():
     # The relevant one (index 7 in original pool) should be among the top
     contents = [m.content for m in result]
     assert any("pro plan" in c or "pricing" in c for c in contents)
+
+
+def test_format_relative_time_human_friendly():
+    """Relative time formatter produces expected human-readable strings."""
+    now = datetime.now(UTC)
+    assert TwinEngineService._format_relative_time(now - timedelta(seconds=30)) == "just now"
+    assert TwinEngineService._format_relative_time(now - timedelta(minutes=5)) == "5m ago"
+    assert TwinEngineService._format_relative_time(now - timedelta(hours=3)) == "3h ago"
+    assert TwinEngineService._format_relative_time(now - timedelta(days=1)) == "yesterday"
+    assert TwinEngineService._format_relative_time(now - timedelta(days=3)) == "3d ago"
+    assert TwinEngineService._format_relative_time(now - timedelta(days=8)) == "last week"
+    assert TwinEngineService._format_relative_time(None) == "unknown time"
+
+
+def test_build_history_prompt_includes_relative_times():
+    """History prompt includes the relative time prefix."""
+    msgs = [
+        _make_message("What is the price?", created_at=datetime.now(UTC) - timedelta(hours=2)),
+        _make_message("Thanks for the info.", created_at=datetime.now(UTC) - timedelta(days=1)),
+    ]
+    prompt = TwinEngineService._build_history_prompt(msgs)
+    assert "[2h ago]" in prompt or "[1h ago]" in prompt or "[3h ago]" in prompt  # approximate
+    assert "yesterday" in prompt
+    assert "Recent conversation history" in prompt

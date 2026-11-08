@@ -4,6 +4,7 @@
 
 Implemented — 2026-11-03 (feature flag default off)
 Fully restored with stopword filtering, relative timestamps, and debug logging — 2026-11-07
+Richer relative timestamps (yesterday, last week) — 2026-11-08
 
 ## Context
 
@@ -22,7 +23,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
-As of 2026-11-06 / 2026-11-07, history prompts include relative timestamps for better LLM grounding, and hybrid mode logs top scores for observability.
+As of 2026-11-06 / 2026-11-07 / 2026-11-08, history prompts include richer relative timestamps (just now, Xm ago, Xh ago, yesterday, Xd ago, last week) for better LLM grounding, and hybrid mode logs top scores for observability.
 
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
@@ -33,7 +34,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Zero-risk default (current behavior unchanged until a feature flag is flipped).
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
-- Relative timestamps and score logging improve debuggability and draft quality.
+- Richer relative timestamps and score logging improve debuggability and draft quality.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -51,11 +52,12 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Add a unit test that verifies a relevant older message outranks a recent irrelevant one. **Done 2026-11-04.**
 - Filter common stopwords in token overlap for higher precision. **Done 2026-11-05.**
 - Enrich history prompt with relative timestamps + hybrid score debug logging. **Done 2026-11-06 / restored 2026-11-07.**
+- Richer relative time labels (yesterday, last week). **Done 2026-11-08.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
-- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`)
+- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
