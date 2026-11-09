@@ -119,6 +119,8 @@ class Settings(BaseSettings):
     feature_whatsapp: bool = False
     # Hybrid short-term memory retrieval (ADR-002). Default off: pure recency of 5.
     feature_hybrid_history: bool = False
+    # Candidate pool size for hybrid scoring (default 20). Ignored when feature is off.
+    hybrid_history_pool_size: int = 20
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600

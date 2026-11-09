@@ -83,6 +83,38 @@ def test_load_hybrid_history_selects_top_scored():
     assert any("pro plan" in c or "pricing" in c for c in contents)
 
 
+def test_load_hybrid_history_respects_configurable_pool_size(monkeypatch):
+    """Candidate pool size comes from settings.hybrid_history_pool_size."""
+    pool = [_make_message(f"msg {i}") for i in range(30)]
+    mock_db = MagicMock()
+    # Capture the limit that was requested
+    captured_limit = []
+
+    def fake_limit(n):
+        captured_limit.append(n)
+        m = MagicMock()
+        m.all.return_value = pool[:n]
+        return m
+
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit = fake_limit
+
+    incoming_msg = _make_message("test")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "c"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    # Temporarily override the setting
+    from app.config import settings
+    original = settings.hybrid_history_pool_size
+    try:
+        settings.hybrid_history_pool_size = 15
+        TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+        assert captured_limit and captured_limit[0] == 15
+    finally:
+        settings.hybrid_history_pool_size = original
+
+
 def test_format_relative_time_human_friendly():
     """Relative time formatter produces expected human-readable strings."""
     now = datetime.now(UTC)

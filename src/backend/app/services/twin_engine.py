@@ -2,6 +2,7 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
+Pool size is configurable via hybrid_history_pool_size.
 """
 from __future__ import annotations
 
@@ -70,7 +71,8 @@ class TwinEngineService:
 
     @staticmethod
     def _load_hybrid_history(db: Session, incoming: Message, user_id: str) -> list[Message]:
-        """Load last 20, score, return top 5. Falls back to pure recency on error."""
+        """Load last N (configurable), score, return top 5. Falls back to pure recency on error."""
+        pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
         try:
             pool = (
                 db.query(Message)
@@ -81,7 +83,7 @@ class TwinEngineService:
                     Message.id != incoming.id,
                 )
                 .order_by(Message.created_at.desc())
-                .limit(20)
+                .limit(pool_size)
                 .all()
             )
             if len(pool) <= 5:
@@ -96,7 +98,7 @@ class TwinEngineService:
 
             if logger.isEnabledFor(logging.DEBUG):
                 top_scores = [(s, (m.content or "")[:60]) for s, m in scored[:3]]
-                logger.debug("hybrid_history_top_scores %s", top_scores)
+                logger.debug("hybrid_history_top_scores pool=%d %s", pool_size, top_scores)
 
             return top
         except Exception as exc:  # noqa: BLE001

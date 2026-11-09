@@ -5,6 +5,7 @@
 Implemented — 2026-11-03 (feature flag default off)
 Fully restored with stopword filtering, relative timestamps, and debug logging — 2026-11-07
 Richer relative timestamps (yesterday, last week) — 2026-11-08
+Configurable candidate pool size — 2026-11-09
 
 ## Context
 
@@ -16,7 +17,7 @@ As conversation histories grow, pure recency can miss relevant earlier turns (e.
 
 Keep the existing recency window (limit=5) as the production default. Introduce a lightweight hybrid scorer that can be enabled later:
 
-1. Candidate pool: last N=20 messages from the same sender+channel (still cheap).
+1. Candidate pool: last N messages from the same sender+channel (N configurable via `hybrid_history_pool_size`, default 20).
 2. Score = 0.7 * recency_decay + 0.3 * simple_token_overlap with the incoming message.
 3. Select top 5 after scoring.
 4. Fall back to pure recency if the pool is small or scoring fails.
@@ -35,6 +36,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
 - Richer relative timestamps and score logging improve debuggability and draft quality.
+- Pool size is now tunable without code changes.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -53,11 +55,13 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Filter common stopwords in token overlap for higher precision. **Done 2026-11-05.**
 - Enrich history prompt with relative timestamps + hybrid score debug logging. **Done 2026-11-06 / restored 2026-11-07.**
 - Richer relative time labels (yesterday, last week). **Done 2026-11-08.**
+- Make candidate pool size configurable. **Done 2026-11-09.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
 - `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
+- `src/backend/app/config.py` (`hybrid_history_pool_size`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
