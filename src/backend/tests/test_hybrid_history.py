@@ -115,6 +115,37 @@ def test_load_hybrid_history_respects_configurable_pool_size(monkeypatch):
         settings.hybrid_history_pool_size = original
 
 
+def test_load_hybrid_history_respects_configurable_top_k(monkeypatch):
+    """Top-K selection comes from settings.hybrid_history_top_k."""
+    pool = []
+    for i in range(15):
+        content = f"filler {i}"
+        if i == 10:
+            content = "relevant pro plan pricing details here"
+        pool.append(_make_message(content, rank_hint=i))
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    incoming_msg = _make_message("pro plan pricing")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "c"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    from app.config import settings
+    original = settings.hybrid_history_top_k
+    try:
+        settings.hybrid_history_top_k = 3
+        result = TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+        assert len(result) == 3
+        # Relevant message should still be included
+        contents = [m.content for m in result]
+        assert any("pro plan" in c for c in contents)
+    finally:
+        settings.hybrid_history_top_k = original
+
+
 def test_format_relative_time_human_friendly():
     """Relative time formatter produces expected human-readable strings."""
     now = datetime.now(UTC)

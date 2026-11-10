@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     feature_hybrid_history: bool = False
     # Candidate pool size for hybrid scoring (default 20). Ignored when feature is off.
     hybrid_history_pool_size: int = 20
+    # Number of top-scored messages to return from the hybrid pool (default 5).
+    hybrid_history_top_k: int = 5
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600

@@ -2,7 +2,7 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
-Pool size is configurable via hybrid_history_pool_size.
+Pool size and top-K are configurable via hybrid_history_pool_size / hybrid_history_top_k.
 """
 from __future__ import annotations
 
@@ -71,8 +71,9 @@ class TwinEngineService:
 
     @staticmethod
     def _load_hybrid_history(db: Session, incoming: Message, user_id: str) -> list[Message]:
-        """Load last N (configurable), score, return top 5. Falls back to pure recency on error."""
+        """Load last N (configurable), score, return top K (configurable). Falls back to pure recency on error."""
         pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
+        top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
         try:
             pool = (
                 db.query(Message)
@@ -86,24 +87,24 @@ class TwinEngineService:
                 .limit(pool_size)
                 .all()
             )
-            if len(pool) <= 5:
-                return pool[:5]
+            if len(pool) <= top_k:
+                return pool[:top_k]
 
             scored = [
                 (TwinEngineService._score_history_message(m, incoming.content or "", rank, len(pool)), m)
                 for rank, m in enumerate(pool)
             ]
             scored.sort(key=lambda x: x[0], reverse=True)
-            top = [m for _, m in scored[:5]]
+            top = [m for _, m in scored[:top_k]]
 
             if logger.isEnabledFor(logging.DEBUG):
                 top_scores = [(s, (m.content or "")[:60]) for s, m in scored[:3]]
-                logger.debug("hybrid_history_top_scores pool=%d %s", pool_size, top_scores)
+                logger.debug("hybrid_history_top_scores pool=%d top_k=%d %s", pool_size, top_k, top_scores)
 
             return top
         except Exception as exc:  # noqa: BLE001
             logger.warning("hybrid_history_failed falling_back_to_recency: %s", exc)
-            return TwinEngineService._load_recent_history(db, incoming, user_id, limit=5)
+            return TwinEngineService._load_recent_history(db, incoming, user_id, limit=top_k)
 
     @staticmethod
     def _load_recent_history(db: Session, incoming: Message, user_id: str, limit: int = 5) -> list[Message]:
