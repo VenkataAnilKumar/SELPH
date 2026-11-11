@@ -2,7 +2,7 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
-Pool size and top-K are configurable via hybrid_history_pool_size / hybrid_history_top_k.
+Pool size, top-K, and scoring weights are configurable.
 """
 from __future__ import annotations
 
@@ -51,7 +51,20 @@ class TwinEngineService:
         rank: int,
         pool_size: int,
     ) -> float:
-        """Hybrid score: 0.7 * recency_decay + 0.3 * token_overlap."""
+        """Hybrid score: recency_weight * recency_decay + overlap_weight * token_overlap.
+
+        Weights come from settings (defaults 0.7 / 0.3) so operators can tune without code changes.
+        """
+        recency_w = float(getattr(settings, "hybrid_history_recency_weight", 0.7) or 0.7)
+        overlap_w = float(getattr(settings, "hybrid_history_overlap_weight", 0.3) or 0.3)
+        # Normalize if they do not sum to ~1.0
+        total = recency_w + overlap_w
+        if total <= 0:
+            recency_w, overlap_w = 0.7, 0.3
+        else:
+            recency_w /= total
+            overlap_w /= total
+
         # Recency: 1.0 for most recent, decays linearly to ~0.3 at the far end
         if pool_size <= 1:
             recency = 1.0
@@ -67,7 +80,7 @@ class TwinEngineService:
         else:
             overlap = len(incoming_tokens & msg_tokens) / max(len(incoming_tokens), 1)
 
-        return 0.7 * recency + 0.3 * overlap
+        return recency_w * recency + overlap_w * overlap
 
     @staticmethod
     def _load_hybrid_history(db: Session, incoming: Message, user_id: str) -> list[Message]:

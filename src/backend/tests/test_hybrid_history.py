@@ -146,6 +146,34 @@ def test_load_hybrid_history_respects_configurable_top_k(monkeypatch):
         settings.hybrid_history_top_k = original
 
 
+def test_score_history_message_respects_configurable_weights():
+    """Scoring weights come from settings and affect ranking."""
+    incoming = "What is the price of the pro plan?"
+    recent_irrelevant = _make_message("How is the weather today?", rank_hint=0)
+    older_relevant = _make_message("The pro plan costs $49 per month with annual billing.", rank_hint=5)
+
+    from app.config import settings
+    original_r = settings.hybrid_history_recency_weight
+    original_o = settings.hybrid_history_overlap_weight
+    try:
+        # Extreme overlap preference should make older relevant win more clearly
+        settings.hybrid_history_recency_weight = 0.2
+        settings.hybrid_history_overlap_weight = 0.8
+        score_recent = TwinEngineService._score_history_message(recent_irrelevant, incoming, rank=0, pool_size=10)
+        score_older = TwinEngineService._score_history_message(older_relevant, incoming, rank=5, pool_size=10)
+        assert score_older > score_recent
+
+        # Extreme recency preference should reverse or narrow the gap
+        settings.hybrid_history_recency_weight = 0.95
+        settings.hybrid_history_overlap_weight = 0.05
+        score_recent_high_r = TwinEngineService._score_history_message(recent_irrelevant, incoming, rank=0, pool_size=10)
+        score_older_high_r = TwinEngineService._score_history_message(older_relevant, incoming, rank=5, pool_size=10)
+        assert score_recent_high_r > score_older_high_r or abs(score_recent_high_r - score_older_high_r) < 0.15
+    finally:
+        settings.hybrid_history_recency_weight = original_r
+        settings.hybrid_history_overlap_weight = original_o
+
+
 def test_format_relative_time_human_friendly():
     """Relative time formatter produces expected human-readable strings."""
     now = datetime.now(UTC)

@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     hybrid_history_pool_size: int = 20
     # Number of top-scored messages to return from the hybrid pool (default 5).
     hybrid_history_top_k: int = 5
+    # Weight for the recency component of hybrid score (default 0.7). Must sum with overlap weight to ~1.0.
+    hybrid_history_recency_weight: float = 0.7
+    # Weight for the token-overlap component of hybrid score (default 0.3).
+    hybrid_history_overlap_weight: float = 0.3
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600
