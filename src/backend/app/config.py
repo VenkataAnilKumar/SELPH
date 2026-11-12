@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     hybrid_history_recency_weight: float = 0.7
     # Weight for the token-overlap component of hybrid score (default 0.3).
     hybrid_history_overlap_weight: float = 0.3
+    # Use actual message age for the recency component (exponential decay) instead of rank in the pool.
+    # Default off so existing rank-based behavior is preserved.
+    hybrid_history_use_time_based_recency: bool = False
+    # Half-life in days for exponential recency decay when time-based scoring is enabled.
+    hybrid_history_recency_half_life_days: float = 7.0
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600

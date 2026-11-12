@@ -174,6 +174,27 @@ def test_score_history_message_respects_configurable_weights():
         settings.hybrid_history_overlap_weight = original_o
 
 
+def test_score_history_message_time_based_recency_prefers_recent():
+    """When time-based recency is enabled, a very recent message scores higher on pure recency than an old one."""
+    incoming = "hello uniquephrase"
+    now = datetime.now(UTC)
+    recent = _make_message("unrelated", created_at=now - timedelta(hours=1))
+    old = _make_message("also unrelated", created_at=now - timedelta(days=14))
+
+    from app.config import settings
+    original_flag = settings.hybrid_history_use_time_based_recency
+    original_half = settings.hybrid_history_recency_half_life_days
+    try:
+        settings.hybrid_history_use_time_based_recency = True
+        settings.hybrid_history_recency_half_life_days = 7.0
+        score_recent = TwinEngineService._score_history_message(recent, incoming, rank=0, pool_size=10)
+        score_old = TwinEngineService._score_history_message(old, incoming, rank=5, pool_size=10)
+        assert score_recent > score_old
+    finally:
+        settings.hybrid_history_use_time_based_recency = original_flag
+        settings.hybrid_history_recency_half_life_days = original_half
+
+
 def test_format_relative_time_human_friendly():
     """Relative time formatter produces expected human-readable strings."""
     now = datetime.now(UTC)

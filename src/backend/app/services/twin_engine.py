@@ -2,11 +2,12 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
-Pool size, top-K, and scoring weights are configurable.
+Pool size, top-K, scoring weights, and optional time-based recency are configurable.
 """
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import datetime, UTC
 from typing import Any
@@ -51,8 +52,10 @@ class TwinEngineService:
         rank: int,
         pool_size: int,
     ) -> float:
-        """Hybrid score: recency_weight * recency_decay + overlap_weight * token_overlap.
+        """Hybrid score: recency_weight * recency + overlap_weight * token_overlap.
 
+        Recency is rank-based by default. When hybrid_history_use_time_based_recency is true,
+        it uses exponential decay from message age with configurable half-life.
         Weights come from settings (defaults 0.7 / 0.3) so operators can tune without code changes.
         """
         recency_w = float(getattr(settings, "hybrid_history_recency_weight", 0.7) or 0.7)
@@ -65,12 +68,28 @@ class TwinEngineService:
             recency_w /= total
             overlap_w /= total
 
-        # Recency: 1.0 for most recent, decays linearly to ~0.3 at the far end
-        if pool_size <= 1:
-            recency = 1.0
+        use_time = bool(getattr(settings, "hybrid_history_use_time_based_recency", False))
+        if use_time:
+            created = getattr(msg, "created_at", None)
+            if created is None:
+                recency = 0.5
+            else:
+                now = datetime.now(UTC)
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=UTC)
+                age_days = max(0.0, (now - created).total_seconds() / 86400.0)
+                half_life = float(getattr(settings, "hybrid_history_recency_half_life_days", 7.0) or 7.0)
+                half_life = max(0.1, half_life)
+                # Exponential decay: 1.0 at age=0, 0.5 at half_life days
+                recency = math.pow(0.5, age_days / half_life)
+                recency = max(0.1, min(1.0, recency))
         else:
-            recency = 1.0 - 0.7 * (rank / max(pool_size - 1, 1))
-        recency = max(0.3, min(1.0, recency))
+            # Rank-based (original): 1.0 for most recent, decays linearly to ~0.3 at the far end
+            if pool_size <= 1:
+                recency = 1.0
+            else:
+                recency = 1.0 - 0.7 * (rank / max(pool_size - 1, 1))
+            recency = max(0.3, min(1.0, recency))
 
         # Overlap
         incoming_tokens = TwinEngineService._extract_reference_tokens(incoming)
