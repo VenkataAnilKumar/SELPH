@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     hybrid_history_use_time_based_recency: bool = False
     # Half-life in days for exponential recency decay when time-based scoring is enabled.
     hybrid_history_recency_half_life_days: float = 7.0
+    # Minimum hybrid score required for a message to be included in the top-K selection.
+    # Default 0.0 (no filtering). When >0, messages below the threshold are dropped; falls back to pure recency if none qualify.
+    hybrid_history_min_score: float = 0.0
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600

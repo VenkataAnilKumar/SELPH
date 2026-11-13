@@ -195,6 +195,43 @@ def test_score_history_message_time_based_recency_prefers_recent():
         settings.hybrid_history_recency_half_life_days = original_half
 
 
+def test_load_hybrid_history_respects_min_score_threshold():
+    """When min_score is set, only messages meeting the threshold are returned; otherwise fallback."""
+    pool = [
+        _make_message("unrelated weather chat", rank_hint=0),
+        _make_message("The pro plan pricing is $49/month", rank_hint=1),
+        _make_message("another filler", rank_hint=2),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    # Mock the pure recency fallback to return a known set
+    with patch.object(TwinEngineService, "_load_recent_history", return_value=[pool[0]]) as mock_recent:
+        incoming_msg = _make_message("pro plan price?")
+        incoming_msg.sender_id = "s"
+        incoming_msg.channel = "c"
+        incoming_msg.user_id = "u"
+        incoming_msg.id = "in"
+
+        from app.config import settings
+        original = settings.hybrid_history_min_score
+        try:
+            # High threshold: only the relevant one should qualify
+            settings.hybrid_history_min_score = 0.5
+            result = TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+            contents = [m.content for m in result]
+            assert any("pro plan" in c for c in contents)
+            assert mock_recent.call_count == 0  # qualified messages existed
+
+            # Extremely high threshold: none qualify, should fall back
+            settings.hybrid_history_min_score = 0.99
+            result2 = TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+            assert mock_recent.call_count == 1
+            assert result2 == [pool[0]]
+        finally:
+            settings.hybrid_history_min_score = original
+
+
 def test_format_relative_time_human_friendly():
     """Relative time formatter produces expected human-readable strings."""
     now = datetime.now(UTC)

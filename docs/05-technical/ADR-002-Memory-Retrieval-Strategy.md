@@ -9,6 +9,7 @@ Configurable candidate pool size — 2026-11-09
 Configurable top-K selection — 2026-11-10
 Configurable scoring weights (recency / overlap) — 2026-11-11
 Optional time-based recency decay (exponential, configurable half-life) — 2026-11-12
+Optional minimum hybrid score threshold — 2026-11-13
 
 ## Context
 
@@ -23,8 +24,8 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 1. Candidate pool: last N messages from the same sender+channel (N configurable via `hybrid_history_pool_size`, default 20).
 2. Score = recency_weight * recency_decay + overlap_weight * simple_token_overlap with the incoming message (weights configurable via `hybrid_history_recency_weight` / `hybrid_history_overlap_weight`, defaults 0.7 / 0.3; normalized if they do not sum to 1).
 3. Recency component is rank-based by default. Optionally (`hybrid_history_use_time_based_recency=true`) use exponential decay from actual message age with configurable half-life (`hybrid_history_recency_half_life_days`, default 7).
-4. Select top K after scoring (K configurable via `hybrid_history_top_k`, default 5).
-5. Fall back to pure recency if the pool is small or scoring fails.
+4. Select top K after scoring (K configurable via `hybrid_history_top_k`, default 5), optionally filtered by a minimum score (`hybrid_history_min_score`, default 0.0).
+5. Fall back to pure recency if the pool is small, scoring fails, or no messages meet the min score.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -40,12 +41,14 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
 - Richer relative timestamps and score logging improve debuggability and draft quality.
-- Pool size, top-K, scoring weights, and (optionally) time-based recency are now tunable without code changes.
+- Pool size, top-K, scoring weights, (optionally) time-based recency, and min score are now tunable without code changes.
+- Min score improves precision by excluding weakly related context.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
 - Slightly more CPU on context load (still negligible).
 - Time-based mode depends on accurate `created_at` timestamps.
+- Aggressive min_score may reduce context volume (mitigated by pure-recency fallback).
 
 ## Alternatives Considered
 
@@ -64,12 +67,13 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Make top-K selection configurable. **Done 2026-11-10.**
 - Make scoring weights configurable. **Done 2026-11-11.**
 - Optional time-based (age-based exponential) recency instead of rank. **Done 2026-11-12.**
+- Optional minimum hybrid score threshold with fallback. **Done 2026-11-13.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
 - `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
-- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`)
+- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
