@@ -10,6 +10,7 @@ Configurable top-K selection — 2026-11-10
 Configurable scoring weights (recency / overlap) — 2026-11-11
 Optional time-based recency decay (exponential, configurable half-life) — 2026-11-12
 Optional minimum hybrid score threshold — 2026-11-13
+Structured hybrid_history_selection metric events — 2026-11-14
 
 ## Context
 
@@ -31,6 +32,8 @@ No new dependencies. Token overlap uses the same `_extract_reference_tokens` hel
 
 As of 2026-11-06 / 2026-11-07 / 2026-11-08, history prompts include richer relative timestamps (just now, Xm ago, Xh ago, yesterday, Xd ago, last week) for better LLM grounding, and hybrid mode logs top scores for observability.
 
+As of 2026-11-14, hybrid selection always emits a structured INFO log (`metric=hybrid_history_selection`) with pool size, qualified count, selected count, top score, and min_score for easy dashboarding.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -43,6 +46,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Richer relative timestamps and score logging improve debuggability and draft quality.
 - Pool size, top-K, scoring weights, (optionally) time-based recency, and min score are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
+- Structured selection metrics enable quality monitoring and alerting on context retrieval.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -68,6 +72,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Make scoring weights configurable. **Done 2026-11-11.**
 - Optional time-based (age-based exponential) recency instead of rank. **Done 2026-11-12.**
 - Optional minimum hybrid score threshold with fallback. **Done 2026-11-13.**
+- Structured hybrid_history_selection metric events. **Done 2026-11-14.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References

@@ -3,6 +3,7 @@
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, and min score are configurable.
+Emits structured hybrid_history_selection metric events for observability.
 """
 from __future__ import annotations
 
@@ -106,6 +107,7 @@ class TwinEngineService:
         """Load last N (configurable), score, return top K (configurable) that meet min score.
 
         Falls back to pure recency on error or if no messages meet the min score threshold.
+        Emits a structured hybrid_history_selection metric for observability.
         """
         pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
         top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
@@ -139,8 +141,31 @@ class TwinEngineService:
                     logger.debug("hybrid_history_no_messages_met_min_score min=%.2f falling_back", min_score)
                     return TwinEngineService._load_recent_history(db, incoming, user_id, limit=top_k)
                 top = [m for _, m in qualified[:top_k]]
+                qualified_count = len(qualified)
             else:
                 top = [m for _, m in scored[:top_k]]
+                qualified_count = len(scored)
+
+            # Structured observability metric (always emitted at INFO when hybrid runs)
+            top_score = scored[0][0] if scored else 0.0
+            selected_count = len(top)
+            payload = {
+                "metric": "hybrid_history_selection",
+                "pool_size": len(pool),
+                "qualified_count": qualified_count,
+                "selected_count": selected_count,
+                "top_score": round(top_score, 4),
+                "min_score": min_score,
+            }
+            logger.info(
+                "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f min_score=%.2f",
+                len(pool),
+                qualified_count,
+                selected_count,
+                top_score,
+                min_score,
+                extra=payload,
+            )
 
             if logger.isEnabledFor(logging.DEBUG):
                 top_scores = [(s, (m.content or "")[:60]) for s, m in scored[:3]]

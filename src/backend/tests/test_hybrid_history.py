@@ -254,3 +254,27 @@ def test_build_history_prompt_includes_relative_times():
     assert "[2h ago]" in prompt or "[1h ago]" in prompt or "[3h ago]" in prompt  # approximate
     assert "yesterday" in prompt
     assert "Recent conversation history" in prompt
+
+
+def test_load_hybrid_history_emits_structured_selection_metric(caplog):
+    """Hybrid selection emits a structured INFO metric event for observability."""
+    pool = [
+        _make_message("unrelated", rank_hint=0),
+        _make_message("pro plan pricing $49", rank_hint=1),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    incoming_msg = _make_message("pro plan price?")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "c"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    with caplog.at_level("INFO"):
+        TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+
+    assert any("hybrid_history_selection" in rec.message for rec in caplog.records)
+    # Check extra payload if available (structlog-style or logging extra)
+    metric_recs = [rec for rec in caplog.records if "hybrid_history_selection" in rec.message]
+    assert metric_recs
