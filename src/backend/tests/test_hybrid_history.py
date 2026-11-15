@@ -278,3 +278,24 @@ def test_load_hybrid_history_emits_structured_selection_metric(caplog):
     # Check extra payload if available (structlog-style or logging extra)
     metric_recs = [rec for rec in caplog.records if "hybrid_history_selection" in rec.message]
     assert metric_recs
+
+
+def test_build_history_prompt_respects_max_chars_and_emits_metric(caplog):
+    """History prompt is truncated when max_chars is set and emits a metric."""
+    msgs = [
+        _make_message("A" * 200, created_at=datetime.now(UTC) - timedelta(hours=1)),
+        _make_message("B" * 200, created_at=datetime.now(UTC) - timedelta(hours=2)),
+        _make_message("C" * 200, created_at=datetime.now(UTC) - timedelta(hours=3)),
+    ]
+
+    from app.config import settings
+    original = settings.hybrid_history_prompt_max_chars
+    try:
+        settings.hybrid_history_prompt_max_chars = 150
+        with caplog.at_level("INFO"):
+            prompt = TwinEngineService._build_history_prompt(msgs)
+        assert len(prompt) <= 200  # truncated + note
+        assert "truncated" in prompt.lower()
+        assert any("hybrid_history_prompt_truncated" in rec.message for rec in caplog.records)
+    finally:
+        settings.hybrid_history_prompt_max_chars = original

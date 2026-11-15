@@ -2,8 +2,9 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
-Pool size, top-K, scoring weights, optional time-based recency, and min score are configurable.
-Emits structured hybrid_history_selection metric events for observability.
+Pool size, top-K, scoring weights, optional time-based recency, min score, and
+optional prompt char limit are configurable.
+Emits structured hybrid_history_selection and hybrid_history_prompt_truncated metric events for observability.
 """
 from __future__ import annotations
 
@@ -221,7 +222,10 @@ class TwinEngineService:
 
     @staticmethod
     def _build_history_prompt(messages: list[Message]) -> str:
-        """Format short-term history with relative timestamps for the LLM."""
+        """Format short-term history with relative timestamps for the LLM.
+
+        Optionally truncates to hybrid_history_prompt_max_chars (0 = no limit) and emits a metric.
+        """
         if not messages:
             return ""
         lines = ["Recent conversation history (most relevant first):"]
@@ -229,7 +233,32 @@ class TwinEngineService:
             rel = TwinEngineService._format_relative_time(getattr(m, "created_at", None))
             content = (getattr(m, "content", "") or "").strip().replace("\n", " ")
             lines.append(f"- [{rel}] {content[:300]}")
-        return "\n".join(lines)
+        prompt = "\n".join(lines)
+
+        max_chars = int(getattr(settings, "hybrid_history_prompt_max_chars", 0) or 0)
+        if max_chars > 0 and len(prompt) > max_chars:
+            original_len = len(prompt)
+            # Truncate at a line boundary if possible
+            truncated = prompt[:max_chars]
+            last_newline = truncated.rfind("\n")
+            if last_newline > max_chars * 0.7:
+                truncated = truncated[:last_newline]
+            prompt = truncated + "\n[... history truncated for length]"
+            payload = {
+                "metric": "hybrid_history_prompt_truncated",
+                "original_chars": original_len,
+                "truncated_chars": len(prompt),
+                "max_chars": max_chars,
+            }
+            logger.info(
+                "hybrid_history_prompt_truncated original=%d truncated=%d max=%d",
+                original_len,
+                len(prompt),
+                max_chars,
+                extra=payload,
+            )
+
+        return prompt
 
     # ------------------------------------------------------------------ #
     # Context loading entry point                                         #
