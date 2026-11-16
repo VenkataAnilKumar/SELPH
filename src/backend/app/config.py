@@ -137,6 +137,9 @@ class Settings(BaseSettings):
     hybrid_history_min_score: float = 0.0
     # Maximum characters for the rendered history prompt (0 = unlimited). Prevents token overflow from long histories.
     hybrid_history_prompt_max_chars: int = 0
+    # Optional diversity threshold (0.0 = disabled). When >0, greedy selection skips messages
+    # whose token overlap with any already-selected message exceeds this value. Reduces near-duplicates.
+    hybrid_history_diversity_threshold: float = 0.0
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600
