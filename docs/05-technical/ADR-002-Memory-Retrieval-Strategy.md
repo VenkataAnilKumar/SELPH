@@ -12,6 +12,7 @@ Optional time-based recency decay (exponential, configurable half-life) — 2026
 Optional minimum hybrid score threshold — 2026-11-13
 Structured hybrid_history_selection metric events — 2026-11-14
 Optional history prompt character limit with truncation metric — 2026-11-15
+Optional diversity threshold to reduce near-duplicate history messages — 2026-11-16
 
 ## Context
 
@@ -27,16 +28,19 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 2. Score = recency_weight * recency_decay + overlap_weight * simple_token_overlap with the incoming message (weights configurable via `hybrid_history_recency_weight` / `hybrid_history_overlap_weight`, defaults 0.7 / 0.3; normalized if they do not sum to 1).
 3. Recency component is rank-based by default. Optionally (`hybrid_history_use_time_based_recency=true`) use exponential decay from actual message age with configurable half-life (`hybrid_history_recency_half_life_days`, default 7).
 4. Select top K after scoring (K configurable via `hybrid_history_top_k`, default 5), optionally filtered by a minimum score (`hybrid_history_min_score`, default 0.0).
-5. Fall back to pure recency if the pool is small, scoring fails, or no messages meet the min score.
-6. Optionally limit the rendered history prompt length (`hybrid_history_prompt_max_chars`, default 0 = unlimited) to protect against token overflow; emits a truncation metric when applied.
+5. Optionally apply a diversity filter (`hybrid_history_diversity_threshold`, default 0.0 = disabled): greedy selection skips messages whose token overlap with any already-selected message exceeds the threshold. Reduces near-duplicates in the returned history.
+6. Fall back to pure recency if the pool is small, scoring fails, or no messages meet the min score.
+7. Optionally limit the rendered history prompt length (`hybrid_history_prompt_max_chars`, default 0 = unlimited) to protect against token overflow; emits a truncation metric when applied.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
 As of 2026-11-06 / 2026-11-07 / 2026-11-08, history prompts include richer relative timestamps (just now, Xm ago, Xh ago, yesterday, Xd ago, last week) for better LLM grounding, and hybrid mode logs top scores for observability.
 
-As of 2026-11-14, hybrid selection always emits a structured INFO log (`metric=hybrid_history_selection`) with pool size, qualified count, selected count, top score, and min_score for easy dashboarding.
+As of 2026-11-14, hybrid selection always emits a structured INFO log (`metric=hybrid_history_selection`) with pool size, qualified count, selected count, top score, min_score, and diversity_threshold for easy dashboarding.
 
 As of 2026-11-15, history prompts can be length-limited and emit `metric=hybrid_history_prompt_truncated` when truncated.
+
+As of 2026-11-16, an optional diversity filter reduces redundant near-duplicate messages in the selected history when the threshold is set > 0.
 
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
@@ -48,8 +52,9 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
 - Richer relative timestamps and score logging improve debuggability and draft quality.
-- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, and prompt length are now tunable without code changes.
+- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, and diversity threshold are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
+- Diversity threshold improves context quality by reducing near-duplicate messages.
 - Structured selection and truncation metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 
@@ -59,6 +64,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Time-based mode depends on accurate `created_at` timestamps.
 - Aggressive min_score may reduce context volume (mitigated by pure-recency fallback).
 - Aggressive prompt truncation may drop useful history (operators should set the limit based on model context window).
+- Aggressive diversity threshold may drop useful but similar messages (operators should tune based on conversation style).
 
 ## Alternatives Considered
 
@@ -80,12 +86,13 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Optional minimum hybrid score threshold with fallback. **Done 2026-11-13.**
 - Structured hybrid_history_selection metric events. **Done 2026-11-14.**
 - Optional history prompt character limit with truncation metric. **Done 2026-11-15.**
+- Optional diversity threshold to reduce near-duplicate history messages. **Done 2026-11-16.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
-- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
+- `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_token_overlap`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
-- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`)
+- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`, `hybrid_history_diversity_threshold`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
