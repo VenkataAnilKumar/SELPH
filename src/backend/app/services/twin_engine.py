@@ -2,8 +2,8 @@
 
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
-Pool size, top-K, scoring weights, optional time-based recency, min score, and
-optional prompt char limit are configurable.
+Pool size, top-K, scoring weights, optional time-based recency, min score,
+optional prompt char limit, and optional diversity threshold are configurable.
 Emits structured hybrid_history_selection and hybrid_history_prompt_truncated metric events for observability.
 """
 from __future__ import annotations
@@ -46,6 +46,16 @@ class TwinEngineService:
             return set()
         tokens = re.findall(r"[a-zA-Z0-9']+", text.lower())
         return {t for t in tokens if len(t) > 2 and t not in _STOPWORDS}
+
+    @staticmethod
+    def _token_overlap(a: str, b: str) -> float:
+        """Jaccard-like token overlap between two texts (0.0-1.0)."""
+        ta = TwinEngineService._extract_reference_tokens(a)
+        tb = TwinEngineService._extract_reference_tokens(b)
+        if not ta or not tb:
+            return 0.0
+        inter = len(ta & tb)
+        return inter / max(len(ta | tb), 1)
 
     @staticmethod
     def _score_history_message(
@@ -107,12 +117,14 @@ class TwinEngineService:
     def _load_hybrid_history(db: Session, incoming: Message, user_id: str) -> list[Message]:
         """Load last N (configurable), score, return top K (configurable) that meet min score.
 
+        Optionally applies a diversity filter when hybrid_history_diversity_threshold > 0.
         Falls back to pure recency on error or if no messages meet the min score threshold.
         Emits a structured hybrid_history_selection metric for observability.
         """
         pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
         top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
         min_score = float(getattr(settings, "hybrid_history_min_score", 0.0) or 0.0)
+        diversity_thresh = float(getattr(settings, "hybrid_history_diversity_threshold", 0.0) or 0.0)
         try:
             pool = (
                 db.query(Message)
@@ -126,7 +138,7 @@ class TwinEngineService:
                 .limit(pool_size)
                 .all()
             )
-            if len(pool) <= top_k and min_score <= 0.0:
+            if len(pool) <= top_k and min_score <= 0.0 and diversity_thresh <= 0.0:
                 return pool[:top_k]
 
             scored = [
@@ -137,15 +149,31 @@ class TwinEngineService:
 
             # Apply min score filter
             if min_score > 0.0:
-                qualified = [(s, m) for s, m in scored if s >= min_score]
-                if not qualified:
+                candidates = [(s, m) for s, m in scored if s >= min_score]
+                if not candidates:
                     logger.debug("hybrid_history_no_messages_met_min_score min=%.2f falling_back", min_score)
                     return TwinEngineService._load_recent_history(db, incoming, user_id, limit=top_k)
-                top = [m for _, m in qualified[:top_k]]
-                qualified_count = len(qualified)
             else:
-                top = [m for _, m in scored[:top_k]]
-                qualified_count = len(scored)
+                candidates = scored
+
+            # Apply optional diversity filter (greedy)
+            if diversity_thresh > 0.0 and candidates:
+                selected: list[tuple[float, Message]] = []
+                for score, msg in candidates:
+                    content = getattr(msg, "content", "") or ""
+                    if any(
+                        TwinEngineService._token_overlap(content, getattr(sel[1], "content", "") or "") > diversity_thresh
+                        for sel in selected
+                    ):
+                        continue
+                    selected.append((score, msg))
+                    if len(selected) >= top_k:
+                        break
+                top = [m for _, m in selected]
+                qualified_count = len(candidates)
+            else:
+                top = [m for _, m in candidates[:top_k]]
+                qualified_count = len(candidates)
 
             # Structured observability metric (always emitted at INFO when hybrid runs)
             top_score = scored[0][0] if scored else 0.0
@@ -157,20 +185,22 @@ class TwinEngineService:
                 "selected_count": selected_count,
                 "top_score": round(top_score, 4),
                 "min_score": min_score,
+                "diversity_threshold": diversity_thresh,
             }
             logger.info(
-                "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f min_score=%.2f",
+                "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f min_score=%.2f diversity=%.2f",
                 len(pool),
                 qualified_count,
                 selected_count,
                 top_score,
                 min_score,
+                diversity_thresh,
                 extra=payload,
             )
 
             if logger.isEnabledFor(logging.DEBUG):
                 top_scores = [(s, (m.content or "")[:60]) for s, m in scored[:3]]
-                logger.debug("hybrid_history_top_scores pool=%d top_k=%d min_score=%.2f %s", pool_size, top_k, min_score, top_scores)
+                logger.debug("hybrid_history_top_scores pool=%d top_k=%d min_score=%.2f diversity=%.2f %s", pool_size, top_k, min_score, diversity_thresh, top_scores)
 
             return top
         except Exception as exc:  # noqa: BLE001
