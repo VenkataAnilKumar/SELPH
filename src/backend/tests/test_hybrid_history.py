@@ -299,3 +299,40 @@ def test_build_history_prompt_respects_max_chars_and_emits_metric(caplog):
         assert any("hybrid_history_prompt_truncated" in rec.message for rec in caplog.records)
     finally:
         settings.hybrid_history_prompt_max_chars = original
+
+
+def test_load_hybrid_history_applies_diversity_threshold():
+    """When diversity threshold > 0, near-duplicate messages are skipped."""
+    # Two nearly identical high-scoring messages and one distinct lower one
+    pool = [
+        _make_message("The pro plan costs $49 per month with annual billing and includes support.", rank_hint=0),
+        _make_message("Pro plan pricing is $49 monthly including annual billing and support options.", rank_hint=1),
+        _make_message("Enterprise plans start at custom pricing. Contact sales for details.", rank_hint=2),
+        _make_message("Weather is nice today and the sky is blue.", rank_hint=3),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    incoming_msg = _make_message("What is the pro plan price?")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "c"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    from app.config import settings
+    original = settings.hybrid_history_diversity_threshold
+    original_k = settings.hybrid_history_top_k
+    try:
+        settings.hybrid_history_top_k = 3
+        settings.hybrid_history_diversity_threshold = 0.6  # should skip the near-duplicate of the first
+        result = TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+        contents = [m.content for m in result]
+        # Should include the first pro plan and the enterprise one, skip the near-duplicate pro plan
+        assert any("pro plan costs $49" in c for c in contents)
+        assert any("Enterprise plans" in c for c in contents)
+        # Near-duplicate should not both be present
+        pro_count = sum(1 for c in contents if "pro plan" in c.lower() or "$49" in c)
+        assert pro_count <= 1
+    finally:
+        settings.hybrid_history_diversity_threshold = original
+        settings.hybrid_history_top_k = original_k
