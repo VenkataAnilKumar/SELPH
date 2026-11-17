@@ -13,6 +13,7 @@ Optional minimum hybrid score threshold — 2026-11-13
 Structured hybrid_history_selection metric events — 2026-11-14
 Optional history prompt character limit with truncation metric — 2026-11-15
 Optional diversity threshold to reduce near-duplicate history messages — 2026-11-16
+Structured hybrid_history_fallback metric events on pure-recency fallback — 2026-11-17
 
 ## Context
 
@@ -31,6 +32,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 5. Optionally apply a diversity filter (`hybrid_history_diversity_threshold`, default 0.0 = disabled): greedy selection skips messages whose token overlap with any already-selected message exceeds the threshold. Reduces near-duplicates in the returned history.
 6. Fall back to pure recency if the pool is small, scoring fails, or no messages meet the min score.
 7. Optionally limit the rendered history prompt length (`hybrid_history_prompt_max_chars`, default 0 = unlimited) to protect against token overflow; emits a truncation metric when applied.
+8. Emit structured fallback metrics when falling back to pure recency.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -41,6 +43,8 @@ As of 2026-11-14, hybrid selection always emits a structured INFO log (`metric=h
 As of 2026-11-15, history prompts can be length-limited and emit `metric=hybrid_history_prompt_truncated` when truncated.
 
 As of 2026-11-16, an optional diversity filter reduces redundant near-duplicate messages in the selected history when the threshold is set > 0.
+
+As of 2026-11-17, fallbacks to pure recency emit `metric=hybrid_history_fallback` with reason (exception or min_score_not_met).
 
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
@@ -55,8 +59,9 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, and diversity threshold are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
 - Diversity threshold improves context quality by reducing near-duplicate messages.
-- Structured selection and truncation metrics enable quality monitoring and alerting on context retrieval and prompt size.
+- Structured selection, truncation, and fallback metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
+- Fallback metrics make hybrid reliability observable.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -87,6 +92,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Structured hybrid_history_selection metric events. **Done 2026-11-14.**
 - Optional history prompt character limit with truncation metric. **Done 2026-11-15.**
 - Optional diversity threshold to reduce near-duplicate history messages. **Done 2026-11-16.**
+- Structured hybrid_history_fallback metric events on pure-recency fallback. **Done 2026-11-17.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References

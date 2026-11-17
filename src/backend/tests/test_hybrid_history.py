@@ -336,3 +336,30 @@ def test_load_hybrid_history_applies_diversity_threshold():
     finally:
         settings.hybrid_history_diversity_threshold = original
         settings.hybrid_history_top_k = original_k
+
+
+def test_load_hybrid_history_emits_fallback_metric_on_min_score(caplog):
+    """When no messages meet min_score, emit structured hybrid_history_fallback metric."""
+    pool = [
+        _make_message("unrelated weather chat", rank_hint=0),
+        _make_message("another filler message", rank_hint=1),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    with patch.object(TwinEngineService, "_load_recent_history", return_value=[pool[0]]):
+        incoming_msg = _make_message("unique pricing question")
+        incoming_msg.sender_id = "s"
+        incoming_msg.channel = "c"
+        incoming_msg.user_id = "u"
+        incoming_msg.id = "in"
+
+        from app.config import settings
+        original = settings.hybrid_history_min_score
+        try:
+            settings.hybrid_history_min_score = 0.99
+            with caplog.at_level("INFO"):
+                TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+            assert any("hybrid_history_fallback" in rec.message for rec in caplog.records)
+        finally:
+            settings.hybrid_history_min_score = original

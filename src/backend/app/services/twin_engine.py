@@ -4,7 +4,8 @@ Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, min score,
 optional prompt char limit, and optional diversity threshold are configurable.
-Emits structured hybrid_history_selection and hybrid_history_prompt_truncated metric events for observability.
+Emits structured hybrid_history_selection, hybrid_history_prompt_truncated,
+and hybrid_history_fallback metric events for observability.
 """
 from __future__ import annotations
 
@@ -120,6 +121,7 @@ class TwinEngineService:
         Optionally applies a diversity filter when hybrid_history_diversity_threshold > 0.
         Falls back to pure recency on error or if no messages meet the min score threshold.
         Emits a structured hybrid_history_selection metric for observability.
+        Emits hybrid_history_fallback on fallback paths.
         """
         pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
         top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
@@ -152,6 +154,16 @@ class TwinEngineService:
                 candidates = [(s, m) for s, m in scored if s >= min_score]
                 if not candidates:
                     logger.debug("hybrid_history_no_messages_met_min_score min=%.2f falling_back", min_score)
+                    payload = {
+                        "metric": "hybrid_history_fallback",
+                        "reason": "min_score_not_met",
+                        "min_score": min_score,
+                    }
+                    logger.info(
+                        "hybrid_history_fallback reason=min_score_not_met min_score=%.2f",
+                        min_score,
+                        extra=payload,
+                    )
                     return TwinEngineService._load_recent_history(db, incoming, user_id, limit=top_k)
             else:
                 candidates = scored
@@ -205,6 +217,15 @@ class TwinEngineService:
             return top
         except Exception as exc:  # noqa: BLE001
             logger.warning("hybrid_history_failed falling_back_to_recency: %s", exc)
+            payload = {
+                "metric": "hybrid_history_fallback",
+                "reason": "exception",
+                "error": str(exc)[:200],
+            }
+            logger.info(
+                "hybrid_history_fallback reason=exception",
+                extra=payload,
+            )
             return TwinEngineService._load_recent_history(db, incoming, user_id, limit=top_k)
 
     @staticmethod
