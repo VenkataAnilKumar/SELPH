@@ -14,6 +14,7 @@ Structured hybrid_history_selection metric events — 2026-11-14
 Optional history prompt character limit with truncation metric — 2026-11-15
 Optional diversity threshold to reduce near-duplicate history messages — 2026-11-16
 Structured hybrid_history_fallback metric events on pure-recency fallback — 2026-11-17
+Structured hybrid_history_diversity_skipped metric events — 2026-11-18
 
 ## Context
 
@@ -29,7 +30,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 2. Score = recency_weight * recency_decay + overlap_weight * simple_token_overlap with the incoming message (weights configurable via `hybrid_history_recency_weight` / `hybrid_history_overlap_weight`, defaults 0.7 / 0.3; normalized if they do not sum to 1).
 3. Recency component is rank-based by default. Optionally (`hybrid_history_use_time_based_recency=true`) use exponential decay from actual message age with configurable half-life (`hybrid_history_recency_half_life_days`, default 7).
 4. Select top K after scoring (K configurable via `hybrid_history_top_k`, default 5), optionally filtered by a minimum score (`hybrid_history_min_score`, default 0.0).
-5. Optionally apply a diversity filter (`hybrid_history_diversity_threshold`, default 0.0 = disabled): greedy selection skips messages whose token overlap with any already-selected message exceeds the threshold. Reduces near-duplicates in the returned history.
+5. Optionally apply a diversity filter (`hybrid_history_diversity_threshold`, default 0.0 = disabled): greedy selection skips messages whose token overlap with any already-selected message exceeds the threshold. Reduces near-duplicates in the returned history. Emits a structured metric when skips occur.
 6. Fall back to pure recency if the pool is small, scoring fails, or no messages meet the min score.
 7. Optionally limit the rendered history prompt length (`hybrid_history_prompt_max_chars`, default 0 = unlimited) to protect against token overflow; emits a truncation metric when applied.
 8. Emit structured fallback metrics when falling back to pure recency.
@@ -46,6 +47,8 @@ As of 2026-11-16, an optional diversity filter reduces redundant near-duplicate 
 
 As of 2026-11-17, fallbacks to pure recency emit `metric=hybrid_history_fallback` with reason (exception or min_score_not_met).
 
+As of 2026-11-18, when the diversity filter skips messages it emits `metric=hybrid_history_diversity_skipped` with skipped_count.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -59,9 +62,9 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, and diversity threshold are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
 - Diversity threshold improves context quality by reducing near-duplicate messages.
-- Structured selection, truncation, and fallback metrics enable quality monitoring and alerting on context retrieval and prompt size.
+- Structured selection, truncation, fallback, and diversity-skip metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
-- Fallback metrics make hybrid reliability observable.
+- Fallback and diversity metrics make hybrid reliability and filter impact observable.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -93,6 +96,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Optional history prompt character limit with truncation metric. **Done 2026-11-15.**
 - Optional diversity threshold to reduce near-duplicate history messages. **Done 2026-11-16.**
 - Structured hybrid_history_fallback metric events on pure-recency fallback. **Done 2026-11-17.**
+- Structured hybrid_history_diversity_skipped metric events. **Done 2026-11-18.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References

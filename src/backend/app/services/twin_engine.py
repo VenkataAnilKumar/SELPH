@@ -5,7 +5,7 @@ FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, min score,
 optional prompt char limit, and optional diversity threshold are configurable.
 Emits structured hybrid_history_selection, hybrid_history_prompt_truncated,
-and hybrid_history_fallback metric events for observability.
+hybrid_history_fallback, and hybrid_history_diversity_skipped metric events for observability.
 """
 from __future__ import annotations
 
@@ -122,6 +122,7 @@ class TwinEngineService:
         Falls back to pure recency on error or if no messages meet the min score threshold.
         Emits a structured hybrid_history_selection metric for observability.
         Emits hybrid_history_fallback on fallback paths.
+        Emits hybrid_history_diversity_skipped when the diversity filter drops messages.
         """
         pool_size = max(5, int(getattr(settings, "hybrid_history_pool_size", 20) or 20))
         top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
@@ -169,6 +170,7 @@ class TwinEngineService:
                 candidates = scored
 
             # Apply optional diversity filter (greedy)
+            skipped_by_diversity = 0
             if diversity_thresh > 0.0 and candidates:
                 selected: list[tuple[float, Message]] = []
                 for score, msg in candidates:
@@ -177,12 +179,27 @@ class TwinEngineService:
                         TwinEngineService._token_overlap(content, getattr(sel[1], "content", "") or "") > diversity_thresh
                         for sel in selected
                     ):
+                        skipped_by_diversity += 1
                         continue
                     selected.append((score, msg))
                     if len(selected) >= top_k:
                         break
                 top = [m for _, m in selected]
                 qualified_count = len(candidates)
+                if skipped_by_diversity > 0:
+                    payload = {
+                        "metric": "hybrid_history_diversity_skipped",
+                        "skipped_count": skipped_by_diversity,
+                        "diversity_threshold": diversity_thresh,
+                        "selected_count": len(top),
+                    }
+                    logger.info(
+                        "hybrid_history_diversity_skipped skipped=%d threshold=%.2f selected=%d",
+                        skipped_by_diversity,
+                        diversity_thresh,
+                        len(top),
+                        extra=payload,
+                    )
             else:
                 top = [m for _, m in candidates[:top_k]]
                 qualified_count = len(candidates)

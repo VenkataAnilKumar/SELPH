@@ -363,3 +363,33 @@ def test_load_hybrid_history_emits_fallback_metric_on_min_score(caplog):
             assert any("hybrid_history_fallback" in rec.message for rec in caplog.records)
         finally:
             settings.hybrid_history_min_score = original
+
+
+def test_load_hybrid_history_emits_diversity_skipped_metric(caplog):
+    """When diversity filter skips messages, emit structured hybrid_history_diversity_skipped metric."""
+    pool = [
+        _make_message("The pro plan costs $49 per month with annual billing and includes support.", rank_hint=0),
+        _make_message("Pro plan pricing is $49 monthly including annual billing and support options.", rank_hint=1),
+        _make_message("Enterprise plans start at custom pricing. Contact sales for details.", rank_hint=2),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    incoming_msg = _make_message("What is the pro plan price?")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "c"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    from app.config import settings
+    original = settings.hybrid_history_diversity_threshold
+    original_k = settings.hybrid_history_top_k
+    try:
+        settings.hybrid_history_top_k = 3
+        settings.hybrid_history_diversity_threshold = 0.6
+        with caplog.at_level("INFO"):
+            TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+        assert any("hybrid_history_diversity_skipped" in rec.message for rec in caplog.records)
+    finally:
+        settings.hybrid_history_diversity_threshold = original
+        settings.hybrid_history_top_k = original_k
