@@ -15,6 +15,7 @@ Optional history prompt character limit with truncation metric — 2026-11-15
 Optional diversity threshold to reduce near-duplicate history messages — 2026-11-16
 Structured hybrid_history_fallback metric events on pure-recency fallback — 2026-11-17
 Structured hybrid_history_diversity_skipped metric events — 2026-11-18
+Optional cross-channel history for hybrid retrieval — 2026-11-19
 
 ## Context
 
@@ -26,7 +27,7 @@ As conversation histories grow, pure recency can miss relevant earlier turns (e.
 
 Keep the existing recency window (limit=5) as the production default. Introduce a lightweight hybrid scorer that can be enabled later:
 
-1. Candidate pool: last N messages from the same sender+channel (N configurable via `hybrid_history_pool_size`, default 20).
+1. Candidate pool: last N messages from the same sender+channel (N configurable via `hybrid_history_pool_size`, default 20). Optionally from other channels with the same sender when `hybrid_history_cross_channel=true`.
 2. Score = recency_weight * recency_decay + overlap_weight * simple_token_overlap with the incoming message (weights configurable via `hybrid_history_recency_weight` / `hybrid_history_overlap_weight`, defaults 0.7 / 0.3; normalized if they do not sum to 1).
 3. Recency component is rank-based by default. Optionally (`hybrid_history_use_time_based_recency=true`) use exponential decay from actual message age with configurable half-life (`hybrid_history_recency_half_life_days`, default 7).
 4. Select top K after scoring (K configurable via `hybrid_history_top_k`, default 5), optionally filtered by a minimum score (`hybrid_history_min_score`, default 0.0).
@@ -49,6 +50,8 @@ As of 2026-11-17, fallbacks to pure recency emit `metric=hybrid_history_fallback
 
 As of 2026-11-18, when the diversity filter skips messages it emits `metric=hybrid_history_diversity_skipped` with skipped_count.
 
+As of 2026-11-19, an optional cross-channel mode (`hybrid_history_cross_channel=true`) lets the hybrid pool include messages from other channels with the same sender, improving multi-channel digital twin context. Default remains same-channel only.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -59,9 +62,10 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
 - Richer relative timestamps and score logging improve debuggability and draft quality.
-- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, and diversity threshold are now tunable without code changes.
+- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, diversity threshold, and cross-channel are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
 - Diversity threshold improves context quality by reducing near-duplicate messages.
+- Cross-channel option improves relevance for users who interact across Instagram, Gmail, etc.
 - Structured selection, truncation, fallback, and diversity-skip metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 - Fallback and diversity metrics make hybrid reliability and filter impact observable.
@@ -73,6 +77,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Aggressive min_score may reduce context volume (mitigated by pure-recency fallback).
 - Aggressive prompt truncation may drop useful history (operators should set the limit based on model context window).
 - Aggressive diversity threshold may drop useful but similar messages (operators should tune based on conversation style).
+- Cross-channel mode may surface context from unrelated conversations if the sender is shared; keep default off and tune carefully.
 
 ## Alternatives Considered
 
@@ -97,12 +102,13 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Optional diversity threshold to reduce near-duplicate history messages. **Done 2026-11-16.**
 - Structured hybrid_history_fallback metric events on pure-recency fallback. **Done 2026-11-17.**
 - Structured hybrid_history_diversity_skipped metric events. **Done 2026-11-18.**
+- Optional cross-channel history for hybrid retrieval. **Done 2026-11-19.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
 - `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_token_overlap`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
-- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`, `hybrid_history_diversity_threshold`)
+- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`, `hybrid_history_diversity_threshold`, `hybrid_history_cross_channel`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`

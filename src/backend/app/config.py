@@ -140,6 +140,9 @@ class Settings(BaseSettings):
     # Optional diversity threshold (0.0 = disabled). When >0, greedy selection skips messages
     # whose token overlap with any already-selected message exceeds this value. Reduces near-duplicates.
     hybrid_history_diversity_threshold: float = 0.0
+    # When True (and hybrid history is enabled), include messages from other channels with the same sender.
+    # Default False preserves same-channel-only behavior. Useful for multi-channel digital twins.
+    hybrid_history_cross_channel: bool = False
 
     # Twin LLM Runtime
     twin_llm_max_tokens: int = 600
