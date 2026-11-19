@@ -393,3 +393,28 @@ def test_load_hybrid_history_emits_diversity_skipped_metric(caplog):
     finally:
         settings.hybrid_history_diversity_threshold = original
         settings.hybrid_history_top_k = original_k
+
+
+def test_load_hybrid_history_cross_channel_flag_does_not_crash():
+    """When cross_channel is enabled, hybrid history still returns results without error."""
+    pool = [
+        _make_message("pro plan pricing details", rank_hint=0),
+        _make_message("unrelated", rank_hint=1),
+    ]
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = pool
+
+    incoming_msg = _make_message("pro plan?")
+    incoming_msg.sender_id = "s"
+    incoming_msg.channel = "gmail"
+    incoming_msg.user_id = "u"
+    incoming_msg.id = "in"
+
+    from app.config import settings
+    original = settings.hybrid_history_cross_channel
+    try:
+        settings.hybrid_history_cross_channel = True
+        result = TwinEngineService._load_hybrid_history(mock_db, incoming_msg, "u")
+        assert len(result) >= 1
+    finally:
+        settings.hybrid_history_cross_channel = original
