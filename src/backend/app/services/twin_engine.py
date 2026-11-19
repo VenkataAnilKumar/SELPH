@@ -3,7 +3,7 @@
 Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, min score,
-optional prompt char limit, and optional diversity threshold are configurable.
+optional prompt char limit, optional diversity threshold, and optional cross-channel are configurable.
 Emits structured hybrid_history_selection, hybrid_history_prompt_truncated,
 hybrid_history_fallback, and hybrid_history_diversity_skipped metric events for observability.
 """
@@ -119,6 +119,7 @@ class TwinEngineService:
         """Load last N (configurable), score, return top K (configurable) that meet min score.
 
         Optionally applies a diversity filter when hybrid_history_diversity_threshold > 0.
+        Optionally includes cross-channel messages when hybrid_history_cross_channel is true.
         Falls back to pure recency on error or if no messages meet the min score threshold.
         Emits a structured hybrid_history_selection metric for observability.
         Emits hybrid_history_fallback on fallback paths.
@@ -128,15 +129,19 @@ class TwinEngineService:
         top_k = max(1, int(getattr(settings, "hybrid_history_top_k", 5) or 5))
         min_score = float(getattr(settings, "hybrid_history_min_score", 0.0) or 0.0)
         diversity_thresh = float(getattr(settings, "hybrid_history_diversity_threshold", 0.0) or 0.0)
+        cross_channel = bool(getattr(settings, "hybrid_history_cross_channel", False))
         try:
+            filters = [
+                Message.user_id == user_id,
+                Message.sender_id == incoming.sender_id,
+                Message.id != incoming.id,
+            ]
+            if not cross_channel:
+                filters.append(Message.channel == incoming.channel)
+
             pool = (
                 db.query(Message)
-                .filter(
-                    Message.user_id == user_id,
-                    Message.sender_id == incoming.sender_id,
-                    Message.channel == incoming.channel,
-                    Message.id != incoming.id,
-                )
+                .filter(*filters)
                 .order_by(Message.created_at.desc())
                 .limit(pool_size)
                 .all()
@@ -215,21 +220,23 @@ class TwinEngineService:
                 "top_score": round(top_score, 4),
                 "min_score": min_score,
                 "diversity_threshold": diversity_thresh,
+                "cross_channel": cross_channel,
             }
             logger.info(
-                "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f min_score=%.2f diversity=%.2f",
+                "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f min_score=%.2f diversity=%.2f cross_channel=%s",
                 len(pool),
                 qualified_count,
                 selected_count,
                 top_score,
                 min_score,
                 diversity_thresh,
+                cross_channel,
                 extra=payload,
             )
 
             if logger.isEnabledFor(logging.DEBUG):
                 top_scores = [(s, (m.content or "")[:60]) for s, m in scored[:3]]
-                logger.debug("hybrid_history_top_scores pool=%d top_k=%d min_score=%.2f diversity=%.2f %s", pool_size, top_k, min_score, diversity_thresh, top_scores)
+                logger.debug("hybrid_history_top_scores pool=%d top_k=%d min_score=%.2f diversity=%.2f cross=%s %s", pool_size, top_k, min_score, diversity_thresh, cross_channel, top_scores)
 
             return top
         except Exception as exc:  # noqa: BLE001
