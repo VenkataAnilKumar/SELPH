@@ -17,6 +17,7 @@ Structured hybrid_history_fallback metric events on pure-recency fallback — 20
 Structured hybrid_history_diversity_skipped metric events — 2026-11-18
 Optional cross-channel history for hybrid retrieval — 2026-11-19
 Structured hybrid_history_cross_channel_included metric events — 2026-11-19
+Channel label in history prompt when cross-channel enabled — 2026-11-20
 
 ## Context
 
@@ -37,6 +38,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 7. Optionally limit the rendered history prompt length (`hybrid_history_prompt_max_chars`, default 0 = unlimited) to protect against token overflow; emits a truncation metric when applied.
 8. Emit structured fallback metrics when falling back to pure recency.
 9. When cross-channel is enabled and selected messages come from other channels, emit a structured `hybrid_history_cross_channel_included` metric with the count.
+10. When cross-channel is enabled, include the source channel in each history prompt line (e.g. `[2h ago | gmail]`) so the LLM has channel context.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -54,6 +56,8 @@ As of 2026-11-18, when the diversity filter skips messages it emits `metric=hybr
 
 As of 2026-11-19, an optional cross-channel mode (`hybrid_history_cross_channel=true`) lets the hybrid pool include messages from other channels with the same sender, improving multi-channel digital twin context. Default remains same-channel only. When cross-channel messages are selected, `metric=hybrid_history_cross_channel_included` is emitted with the count.
 
+As of 2026-11-20, when cross-channel mode is enabled the history prompt includes the channel name on each line so the model can distinguish context sources.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -68,6 +72,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Min score improves precision by excluding weakly related context.
 - Diversity threshold improves context quality by reducing near-duplicate messages.
 - Cross-channel option improves relevance for users who interact across Instagram, Gmail, etc.
+- Channel labels in the prompt give the LLM explicit source context when multi-channel history is used.
 - Structured selection, truncation, fallback, diversity-skip, and cross-channel metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 - Fallback, diversity, and cross-channel metrics make hybrid reliability and filter impact observable.
@@ -80,6 +85,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Aggressive prompt truncation may drop useful history (operators should set the limit based on model context window).
 - Aggressive diversity threshold may drop useful but similar messages (operators should tune based on conversation style).
 - Cross-channel mode may surface context from unrelated conversations if the sender is shared; keep default off and tune carefully.
+- Channel labels add a few tokens to the prompt when the feature is on.
 
 ## Alternatives Considered
 
@@ -106,6 +112,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Structured hybrid_history_diversity_skipped metric events. **Done 2026-11-18.**
 - Optional cross-channel history for hybrid retrieval. **Done 2026-11-19.**
 - Structured hybrid_history_cross_channel_included metric events. **Done 2026-11-19.**
+- Include channel label in history prompt when cross-channel is enabled. **Done 2026-11-20.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References

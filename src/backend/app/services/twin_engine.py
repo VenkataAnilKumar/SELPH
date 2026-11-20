@@ -4,6 +4,7 @@ Implements ADR-002: pure recency (limit=5) by default; hybrid scoring behind
 FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, min score,
 optional prompt char limit, optional diversity threshold, and optional cross-channel are configurable.
+When cross-channel is enabled, history prompt lines include the source channel.
 Emits structured hybrid_history_selection, hybrid_history_prompt_truncated,
 hybrid_history_fallback, hybrid_history_diversity_skipped, and hybrid_history_cross_channel_included metric events for observability.
 """
@@ -321,15 +322,22 @@ class TwinEngineService:
     def _build_history_prompt(messages: list[Message]) -> str:
         """Format short-term history with relative timestamps for the LLM.
 
+        When hybrid_history_cross_channel is enabled, each line includes the source channel
+        so the model knows which channel the prior message came from.
         Optionally truncates to hybrid_history_prompt_max_chars (0 = no limit) and emits a metric.
         """
         if not messages:
             return ""
+        cross_channel = bool(getattr(settings, "hybrid_history_cross_channel", False))
         lines = ["Recent conversation history (most relevant first):"]
         for m in messages:
             rel = TwinEngineService._format_relative_time(getattr(m, "created_at", None))
             content = (getattr(m, "content", "") or "").strip().replace("\n", " ")
-            lines.append(f"- [{rel}] {content[:300]}")
+            channel = getattr(m, "channel", None)
+            if cross_channel and channel:
+                lines.append(f"- [{rel} | {channel}] {content[:300]}")
+            else:
+                lines.append(f"- [{rel}] {content[:300]}")
         prompt = "\n".join(lines)
 
         max_chars = int(getattr(settings, "hybrid_history_prompt_max_chars", 0) or 0)
