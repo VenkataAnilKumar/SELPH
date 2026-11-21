@@ -5,6 +5,7 @@ FEATURE_HYBRID_HISTORY. History prompts include relative timestamps.
 Pool size, top-K, scoring weights, optional time-based recency, min score,
 optional prompt char limit, optional diversity threshold, and optional cross-channel are configurable.
 When cross-channel is enabled, history prompt lines include the source channel.
+History prompt lines always include the sender_name when available for better grounding.
 Emits structured hybrid_history_selection, hybrid_history_prompt_truncated,
 hybrid_history_fallback, hybrid_history_diversity_skipped, and hybrid_history_cross_channel_included metric events for observability.
 """
@@ -324,6 +325,7 @@ class TwinEngineService:
 
         When hybrid_history_cross_channel is enabled, each line includes the source channel
         so the model knows which channel the prior message came from.
+        Always includes the sender_name when available for better conversation grounding.
         Optionally truncates to hybrid_history_prompt_max_chars (0 = no limit) and emits a metric.
         """
         if not messages:
@@ -334,10 +336,10 @@ class TwinEngineService:
             rel = TwinEngineService._format_relative_time(getattr(m, "created_at", None))
             content = (getattr(m, "content", "") or "").strip().replace("\n", " ")
             channel = getattr(m, "channel", None)
-            if cross_channel and channel:
-                lines.append(f"- [{rel} | {channel}] {content[:300]}")
-            else:
-                lines.append(f"- [{rel}] {content[:300]}")
+            sender = getattr(m, "sender_name", None) or ""
+            channel_part = f" | {channel}" if cross_channel and channel else ""
+            sender_part = f" | {sender}" if sender else ""
+            lines.append(f"- [{rel}{channel_part}{sender_part}] {content[:300]}")
         prompt = "\n".join(lines)
 
         max_chars = int(getattr(settings, "hybrid_history_prompt_max_chars", 0) or 0)
