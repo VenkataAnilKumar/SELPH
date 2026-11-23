@@ -19,6 +19,7 @@ Optional cross-channel history for hybrid retrieval — 2026-11-19
 Structured hybrid_history_cross_channel_included metric events — 2026-11-19
 Channel label in history prompt when cross-channel enabled — 2026-11-20
 Sender name label in history prompt lines — 2026-11-21
+Configurable per-line character limit and optional subject inclusion in history prompts — 2026-11-22
 
 ## Context
 
@@ -41,6 +42,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 9. When cross-channel is enabled and selected messages come from other channels, emit a structured `hybrid_history_cross_channel_included` metric with the count.
 10. When cross-channel is enabled, include the source channel in each history prompt line (e.g. `[2h ago | gmail]`) so the LLM has channel context.
 11. Always include the sender_name in each history prompt line when available (e.g. `[2h ago | gmail | Alice]`) for better multi-party grounding.
+12. Limit each history line's content preview to `hybrid_history_line_max_chars` (default 300) to control prompt size. Optionally include email subject from `channel_metadata` when present (e.g. `subj:Meeting follow-up`).
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -62,6 +64,8 @@ As of 2026-11-20, when cross-channel mode is enabled the history prompt includes
 
 As of 2026-11-21, history prompt lines include the sender_name when available, improving grounding for conversations involving named participants.
 
+As of 2026-11-22, each history line is limited to a configurable character count (`hybrid_history_line_max_chars`, default 300) and may optionally include the email subject from channel metadata for better context without exceeding prompt budgets.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -72,12 +76,13 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Reuses existing helpers and database queries.
 - Stopword filtering improves precision of the token-overlap signal.
 - Richer relative timestamps and score logging improve debuggability and draft quality.
-- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, diversity threshold, and cross-channel are now tunable without code changes.
+- Pool size, top-K, scoring weights, (optionally) time-based recency, min score, prompt length, diversity threshold, cross-channel, line length, and subject inclusion are now tunable without code changes.
 - Min score improves precision by excluding weakly related context.
 - Diversity threshold improves context quality by reducing near-duplicate messages.
 - Cross-channel option improves relevance for users who interact across Instagram, Gmail, etc.
 - Channel labels in the prompt give the LLM explicit source context when multi-channel history is used.
 - Sender name labels in the prompt give the LLM explicit participant context.
+- Per-line character limits and optional subject inclusion give finer control over prompt size and context richness.
 - Structured selection, truncation, fallback, diversity-skip, and cross-channel metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 - Fallback, diversity, and cross-channel metrics make hybrid reliability and filter impact observable.
@@ -90,7 +95,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Aggressive prompt truncation may drop useful history (operators should set the limit based on model context window).
 - Aggressive diversity threshold may drop useful but similar messages (operators should tune based on conversation style).
 - Cross-channel mode may surface context from unrelated conversations if the sender is shared; keep default off and tune carefully.
-- Channel and sender labels add a few tokens to the prompt.
+- Channel, sender, subject labels and line truncation add a few tokens or may clip content; tune based on model context.
 
 ## Alternatives Considered
 
@@ -119,13 +124,14 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Structured hybrid_history_cross_channel_included metric events. **Done 2026-11-19.**
 - Include channel label in history prompt when cross-channel is enabled. **Done 2026-11-20.**
 - Include sender name in history prompt lines. **Done 2026-11-21.**
+- Configurable per-line character limit (`hybrid_history_line_max_chars`) and optional subject inclusion. **Done 2026-11-22.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
 
 - `src/backend/app/services/twin_engine.py` (`_load_context`, `_load_hybrid_history`, `_score_history_message`, `_extract_reference_tokens`, `_token_overlap`, `_build_prompts`, `_build_history_prompt`, `_format_relative_time`)
 - `src/backend/app/services/twin_langgraph.py` (`load_context_node`)
-- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`, `hybrid_history_diversity_threshold`, `hybrid_history_cross_channel`)
+- `src/backend/app/config.py` (`hybrid_history_pool_size`, `hybrid_history_top_k`, `hybrid_history_recency_weight`, `hybrid_history_overlap_weight`, `hybrid_history_use_time_based_recency`, `hybrid_history_recency_half_life_days`, `hybrid_history_min_score`, `hybrid_history_prompt_max_chars`, `hybrid_history_diversity_threshold`, `hybrid_history_cross_channel`, `hybrid_history_line_max_chars`)
 - `docs/05-technical/SELPH_Database-Schema.md` (pgvector availability)
 - `src/backend/tests/test_hybrid_history.py`
 - `src/backend/tests/test_hybrid_history_sender_label.py`
