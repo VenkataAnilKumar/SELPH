@@ -130,8 +130,9 @@ class TwinEngineService:
             )
             return TwinEngineService._load_recent_history(db, incoming, user_id, top_k)
 
-        # Diversity filter (greedy)
+        # Diversity filter (greedy) — track scores of selected
         selected: list[Message] = []
+        selected_scores: list[float] = []
         skipped = 0
         for score, msg in qualified:
             if len(selected) >= top_k:
@@ -146,6 +147,7 @@ class TwinEngineService:
                     skipped += 1
                     continue
             selected.append(msg)
+            selected_scores.append(score)
 
         if skipped:
             logger.info(
@@ -165,20 +167,23 @@ class TwinEngineService:
                     extra={"metric": "hybrid_history_cross_channel_included", "count": cross_count},
                 )
 
-        # Selection metric
+        # Selection metric with average score for quality observability
         top_score = qualified[0][0] if qualified else 0.0
+        avg_score = sum(selected_scores) / len(selected_scores) if selected_scores else 0.0
         logger.info(
-            "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f",
+            "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f avg_score=%.3f",
             len(pool),
             len(qualified),
             len(selected),
             top_score,
+            avg_score,
             extra={
                 "metric": "hybrid_history_selection",
                 "pool_size": len(pool),
                 "qualified_count": len(qualified),
                 "selected_count": len(selected),
                 "top_score": top_score,
+                "avg_score": avg_score,
                 "min_score": min_score,
                 "diversity_threshold": diversity_thresh,
                 "cross_channel": cross_channel,

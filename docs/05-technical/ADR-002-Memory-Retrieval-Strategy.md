@@ -21,6 +21,7 @@ Channel label in history prompt when cross-channel enabled — 2026-11-20
 Sender name label in history prompt lines — 2026-11-21
 Configurable per-line character limit and optional subject inclusion in history prompts — 2026-11-22
 Restored full implementation after placeholder regression; added hybrid_history_prompt_length metric — 2026-11-24
+Average score included in hybrid_history_selection metric — 2026-11-25
 
 ## Context
 
@@ -45,6 +46,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 11. Always include the sender_name in each history prompt line when available (e.g. `[2h ago | gmail | Alice]`) for better multi-party grounding.
 12. Limit each history line's content preview to `hybrid_history_line_max_chars` (default 300) to control prompt size. Optionally include email subject from `channel_metadata` when present (e.g. `subj:Meeting follow-up`).
 13. Always emit a structured `hybrid_history_prompt_length` metric with the final character count for prompt size monitoring.
+14. The selection metric includes `avg_score` of the selected messages for quality observability.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -70,6 +72,8 @@ As of 2026-11-22, each history line is limited to a configurable character count
 
 As of 2026-11-24, the full implementation was restored after a placeholder regression, and a new `hybrid_history_prompt_length` metric is always emitted for prompt size observability.
 
+As of 2026-11-25, the selection metric includes the average score of selected messages to help monitor retrieval quality.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -87,9 +91,10 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Channel labels in the prompt give the LLM explicit source context when multi-channel history is used.
 - Sender name labels in the prompt give the LLM explicit participant context.
 - Per-line character limits and optional subject inclusion give finer control over prompt size and context richness.
-- Structured selection, truncation, fallback, diversity-skip, cross-channel, and prompt-length metrics enable quality monitoring and alerting on context retrieval and prompt size.
+- Structured selection (now with avg_score), truncation, fallback, diversity-skip, cross-channel, and prompt-length metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 - Fallback, diversity, and cross-channel metrics make hybrid reliability and filter impact observable.
+- Average score in selection metric makes it easier to detect when hybrid retrieval is selecting low-relevance context.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -130,6 +135,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Include sender name in history prompt lines. **Done 2026-11-21.**
 - Configurable per-line character limit (`hybrid_history_line_max_chars`) and optional subject inclusion. **Done 2026-11-22.**
 - Restore full implementation after placeholder regression + emit hybrid_history_prompt_length metric. **Done 2026-11-24.**
+- Include average score in hybrid_history_selection metric. **Done 2026-11-25.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
