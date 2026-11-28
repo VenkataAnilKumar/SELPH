@@ -192,11 +192,11 @@ class TwinEngineService:
             if ages:
                 avg_age_days = sum(ages) / len(ages)
 
-        # Selection metric with average score, filtered count, and average age for quality/recency observability
+        # Selection metric with average score, filtered count, average age, and diversity skipped for quality/recency/filter observability
         top_score = qualified[0][0] if qualified else 0.0
         avg_score = sum(selected_scores) / len(selected_scores) if selected_scores else 0.0
         logger.info(
-            "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f avg_score=%.3f filtered=%d avg_age_days=%.2f",
+            "hybrid_history_selection pool=%d qualified=%d selected=%d top_score=%.3f avg_score=%.3f filtered=%d avg_age_days=%.2f diversity_skipped=%d",
             len(pool),
             len(qualified),
             len(selected),
@@ -204,6 +204,7 @@ class TwinEngineService:
             avg_score,
             filtered_count,
             avg_age_days,
+            skipped,
             extra={
                 "metric": "hybrid_history_selection",
                 "pool_size": len(pool),
@@ -213,6 +214,7 @@ class TwinEngineService:
                 "avg_score": avg_score,
                 "filtered_count": filtered_count,
                 "avg_age_days": avg_age_days,
+                "diversity_skipped_count": skipped,
                 "min_score": min_score,
                 "diversity_threshold": diversity_thresh,
                 "cross_channel": cross_channel,

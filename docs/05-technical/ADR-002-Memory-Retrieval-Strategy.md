@@ -24,6 +24,7 @@ Restored full implementation after placeholder regression; added hybrid_history_
 Average score included in hybrid_history_selection metric — 2026-11-25
 Structured hybrid_history_min_score_filtered metric events — 2026-11-26
 Average age of selected messages included in hybrid_history_selection metric — 2026-11-27
+Diversity skipped count included in hybrid_history_selection metric — 2026-11-28
 
 ## Context
 
@@ -51,6 +52,7 @@ Keep the existing recency window (limit=5) as the production default. Introduce 
 14. The selection metric includes `avg_score` of the selected messages for quality observability.
 15. When messages are filtered by min_score, emit a structured `hybrid_history_min_score_filtered` metric with the count and include `filtered_count` in the selection metric.
 16. The selection metric includes `avg_age_days` of the selected messages (when timestamps are available) for recency observability.
+17. The selection metric includes `diversity_skipped_count` for observability of the diversity filter impact.
 
 No new dependencies. Token overlap uses the same `_extract_reference_tokens` helper already used for briefing matching. As of 2026-11-05 the helper filters a small English stopword set so overlap focuses on content words.
 
@@ -82,6 +84,8 @@ As of 2026-11-26, when the min_score filter excludes messages a structured `hybr
 
 As of 2026-11-27, the selection metric includes `avg_age_days` of selected messages (when timestamps available) to monitor how recent the retrieved context is.
 
+As of 2026-11-28, the selection metric includes `diversity_skipped_count` to monitor the impact of the diversity filter.
+
 Semantic retrieval via pgvector embeddings remains a future phase once a local or BYOK embedding model is configured (consistent with the LiteLLM draft path).
 
 ## Consequences
@@ -99,10 +103,10 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Channel labels in the prompt give the LLM explicit source context when multi-channel history is used.
 - Sender name labels in the prompt give the LLM explicit participant context.
 - Per-line character limits and optional subject inclusion give finer control over prompt size and context richness.
-- Structured selection (now with avg_score, filtered_count, and avg_age_days), truncation, fallback, diversity-skip, cross-channel, min-score-filtered, and prompt-length metrics enable quality monitoring and alerting on context retrieval and prompt size.
+- Structured selection (now with avg_score, filtered_count, avg_age_days, and diversity_skipped_count), truncation, fallback, diversity-skip, cross-channel, min-score-filtered, and prompt-length metrics enable quality monitoring and alerting on context retrieval and prompt size.
 - Prompt length limit protects downstream LLM calls from context overflow.
 - Fallback, diversity, cross-channel, and min-score filter metrics make hybrid reliability and filter impact observable.
-- Average score, filtered count, and average age in selection metric make it easier to detect when hybrid retrieval is selecting low-relevance, heavily filtered, or overly stale context.
+- Average score, filtered count, average age, and diversity skipped count in selection metric make it easier to detect when hybrid retrieval is selecting low-relevance, heavily filtered, overly stale, or heavily de-duplicated context.
 
 ### Negative / Trade-offs
 - Token overlap is a weak proxy for semantics; true embeddings will be better later.
@@ -146,6 +150,7 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - Include average score in hybrid_history_selection metric. **Done 2026-11-25.**
 - Emit structured hybrid_history_min_score_filtered metric and include filtered_count in selection. **Done 2026-11-26.**
 - Include average age of selected messages in hybrid_history_selection metric. **Done 2026-11-27.**
+- Include diversity skipped count in hybrid_history_selection metric. **Done 2026-11-28.**
 - Later: optional embedding column on `messages` + cosine search when an embedding provider is configured.
 
 ## References
@@ -158,3 +163,4 @@ Semantic retrieval via pgvector embeddings remains a future phase once a local o
 - `src/backend/tests/test_hybrid_history_sender_label.py`
 - `src/backend/tests/test_hybrid_history_min_score_filtered.py`
 - `src/backend/tests/test_hybrid_history_avg_age.py`
+- `src/backend/tests/test_hybrid_history_diversity_skipped_count.py`
